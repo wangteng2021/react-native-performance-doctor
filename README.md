@@ -2,6 +2,9 @@
 
 Claude Code Skill for diagnosing and fixing React Native performance issues.
 
+[![GitHub stars](https://img.shields.io/github/stars/wangteng2021/react-native-performance-doctor)](https://github.com/wangteng2021/react-native-performance-doctor/stargazers)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 ## Features
 
 - **Automatic Diagnosis**: 67 performance rules covering 7 categories
