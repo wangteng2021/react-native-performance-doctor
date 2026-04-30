@@ -1,0 +1,1 @@
+window._CCSettings={platform:"web-mobile",groupList:["default"],collisionMatrix:[[true]],hasResourcesBundle:true,hasStartSceneBundle:false,remoteBundles:[],subpackages:[],launchScene:"db://assets/entry/scene/Launch.fire",orientation:"portrait",jsList:["assets/entry/scripts/libs/qrcode.c935a.js"],bundleVers:{internal:"d17e2",resources:"28213",main:"803b1"}};

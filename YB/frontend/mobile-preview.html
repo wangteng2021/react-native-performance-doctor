@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PinataWins Mobile Preview</title>
+  <style>
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: #0d1117;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    body {
+      display: grid;
+      place-items: center;
+    }
+
+    .phone {
+      width: min(430px, 100vw);
+      height: min(932px, 100vh);
+      background: #171717;
+      overflow: hidden;
+      box-shadow: 0 24px 80px rgba(0, 0, 0, 0.55);
+    }
+
+    iframe {
+      width: 100%;
+      height: 100%;
+      border: 0;
+      display: block;
+      background: #171717;
+    }
+  </style>
+</head>
+<body>
+  <main class="phone" aria-label="PinataWins mobile preview">
+    <iframe id="game" title="PinataWins" allow="autoplay; fullscreen"></iframe>
+  </main>
+  <script>
+    (function () {
+      var params = new URLSearchParams(window.location.search);
+      params.set('embed', '1');
+      if (!params.get('lang')) params.set('lang', 'en');
+      if (!params.get('code')) params.set('code', 'cXO0E8snVT');
+      if (!params.get('backurl')) params.set('backurl', 'openurl://closegame');
+      document.getElementById('game').src = '/pinatawins/index.html?' + params.toString();
+    })();
+  </script>
+</body>
+</html>
