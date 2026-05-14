@@ -1,4 +1,5 @@
 const http = require("node:http");
+const https = require("node:https");
 const path = require("node:path");
 const fs = require("node:fs");
 const crypto = require("node:crypto");
@@ -60,6 +61,8 @@ if (!process.env.EMBED_SESSION_SECRET) {
   console.warn("[security] EMBED_SESSION_SECRET not set; using process-local fallback. Set it in production for stable embed sessions.");
 }
 const EMBED_SESSION_MAX_AGE_SECONDS = 86400;
+const FISHSTAR_UPSTREAM_ORIGIN = "https://game-cn-test.jieyou.shop";
+const FISHSTAR_UPSTREAM_HOST = "game-cn-test.jieyou.shop";
 // 多 repo 部署:推荐目录布局 /www/wwwroot/wtns/{server,admin,official,games/<gameId>},
 // 默认值就是这个相对结构(__dirname 是 server/backend,..往上一级再分别找 sibling repo)。
 // 部署目录不一致时通过下面 3 个 env 覆盖。
@@ -535,6 +538,80 @@ function readBody(request) {
   });
 }
 
+function requireFishStarLaunchSession(request, response) {
+  const session = readEmbedSession(request);
+  if (!session || session.gameId !== "fishstar") {
+    if (response) sendText(response, 401, "Missing or invalid FishStar launch session");
+    return null;
+  }
+  return session;
+}
+
+function getPublicOrigin(request) {
+  const proto = request.headers["x-forwarded-proto"] || (isHttps(request) ? "https" : "http");
+  return `${proto}://${request.headers.host}`;
+}
+
+function rewriteFishStarRouteResponse(payload, request) {
+  const origin = getPublicOrigin(request);
+  const data = payload && payload.data;
+  if (data && typeof data === "object") {
+    data.http_addr = `${origin}/fishstar-proxy/s01/fishing/`;
+    data.ws_addr = `${origin.startsWith("https://") ? "wss" : "ws"}://${request.headers.host}/fishstar-proxy-ws/s01/fishing/ws`;
+  }
+  return payload;
+}
+
+function proxyFishStarHttp(request, response, url) {
+  if (!requireFishStarLaunchSession(request, response)) return;
+  if (request.method !== "GET" && request.method !== "POST") {
+    sendText(response, 405, "Method not allowed");
+    return;
+  }
+
+  const upstreamPath = url.pathname.replace(/^\/fishstar-proxy/, "") || "/";
+  if (!upstreamPath.startsWith("/game_route/") && !upstreamPath.startsWith("/s01/fishing/")) {
+    sendText(response, 404, "Not found");
+    return;
+  }
+
+  const upstreamUrl = new URL(`${FISHSTAR_UPSTREAM_ORIGIN}${upstreamPath}${url.search}`);
+  const headers = {
+    "user-agent": request.headers["user-agent"] || "",
+    "accept": request.headers.accept || "*/*",
+    "accept-language": request.headers["accept-language"] || "en-US,en;q=0.9"
+  };
+  if (request.headers["content-type"]) headers["content-type"] = request.headers["content-type"];
+
+  const upstreamRequest = https.request(upstreamUrl, { method: request.method, headers }, (upstreamResponse) => {
+    const chunks = [];
+    upstreamResponse.on("data", (chunk) => chunks.push(chunk));
+    upstreamResponse.on("end", () => {
+      let body = Buffer.concat(chunks);
+      const contentType = upstreamResponse.headers["content-type"] || "application/octet-stream";
+      if (upstreamPath === "/game_route/get_addr" && contentType.includes("application/json")) {
+        try {
+          const rewritten = rewriteFishStarRouteResponse(JSON.parse(body.toString("utf8")), request);
+          body = Buffer.from(JSON.stringify(rewritten));
+        } catch (error) {
+          // Keep upstream body if it is not valid JSON.
+        }
+      }
+      response.writeHead(upstreamResponse.statusCode || 502, {
+        "Content-Type": contentType,
+        "Cache-Control": "no-store",
+        ...buildCorsHeaders(response)
+      });
+      response.end(body);
+    });
+  });
+  upstreamRequest.on("error", (error) => {
+    if (!response.writableEnded) sendJson(response, 502, { ok: false, error: error.message });
+  });
+  request.pipe(upstreamRequest);
+}
+
+
 function serveStaticFrom(rootDir, request, response, routePrefix = "") {
   const url = new URL(request.url, `http://${request.headers.host}`);
   const rawPath = routePrefix && url.pathname.startsWith(routePrefix)
@@ -713,6 +790,11 @@ const server = http.createServer(async (request, response) => {
   const url = new URL(request.url, `http://${request.headers.host}`);
 
   try {
+    if (url.pathname.startsWith("/fishstar-proxy/")) {
+      proxyFishStarHttp(request, response, url);
+      return;
+    }
+
     if (url.pathname.startsWith("/socket.io/")) {
       await handleSocketIo(request, response, url);
       return;
@@ -1517,6 +1599,65 @@ const server = http.createServer(async (request, response) => {
   }
 });
 
+server.on("upgrade", (request, socket, head) => {
+  const url = new URL(request.url, `http://${request.headers.host}`);
+  if (!url.pathname.startsWith("/fishstar-proxy-ws/")) {
+    socket.destroy();
+    return;
+  }
+  if (!requireFishStarLaunchSession(request, null)) {
+    socket.write("HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n");
+    socket.destroy();
+    return;
+  }
+  const upstreamPath = url.pathname.replace(/^\/fishstar-proxy-ws/, "") || "/";
+  if (!upstreamPath.startsWith("/s01/fishing/ws")) {
+    socket.write("HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n");
+    socket.destroy();
+    return;
+  }
+
+  const upstreamRequest = https.request({
+    hostname: FISHSTAR_UPSTREAM_HOST,
+    port: 443,
+    path: `${upstreamPath}${url.search}`,
+    method: "GET",
+    headers: {
+      "Host": FISHSTAR_UPSTREAM_HOST,
+      "Upgrade": "websocket",
+      "Connection": "Upgrade",
+      "Sec-WebSocket-Key": request.headers["sec-websocket-key"],
+      "Sec-WebSocket-Version": request.headers["sec-websocket-version"] || "13",
+      "Sec-WebSocket-Extensions": request.headers["sec-websocket-extensions"] || undefined,
+      "Origin": getPublicOrigin(request),
+      "User-Agent": request.headers["user-agent"] || "Mozilla/5.0"
+    }
+  });
+
+  upstreamRequest.on("upgrade", (upstreamResponse, upstreamSocket, upstreamHead) => {
+    socket.write(
+      `HTTP/1.1 ${upstreamResponse.statusCode} ${upstreamResponse.statusMessage}\r\n` +
+      Object.entries(upstreamResponse.headers)
+        .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(", ") : value}`)
+        .join("\r\n") +
+      "\r\n\r\n"
+    );
+    if (upstreamHead && upstreamHead.length) socket.write(upstreamHead);
+    if (head && head.length) upstreamSocket.write(head);
+    upstreamSocket.pipe(socket);
+    socket.pipe(upstreamSocket);
+  });
+  upstreamRequest.on("response", (upstreamResponse) => {
+    socket.write(`HTTP/1.1 ${upstreamResponse.statusCode || 502} ${upstreamResponse.statusMessage || "Bad Gateway"}\r\nConnection: close\r\n\r\n`);
+    socket.destroy();
+  });
+  upstreamRequest.on("error", () => {
+    socket.write("HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\n\r\n");
+    socket.destroy();
+  });
+  upstreamRequest.end();
+});
+
 server.listen(PORT, () => {
   console.log(`Piñata Fiesta running at http://localhost:${PORT}`);
   console.log(
@@ -1526,6 +1667,7 @@ server.listen(PORT, () => {
   );
   console.log(`SQLite db: ${db.DB_PATH}`);
 });
+
 
 // 每 24 小时清理 1 年前的 spin_history + 过期 session
 const PRUNE_INTERVAL_MS = 24 * 60 * 60 * 1000;
