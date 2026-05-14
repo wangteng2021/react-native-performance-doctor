@@ -1,0 +1,761 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>商户详情 · WTNS Gaming Admin</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div id="topNav"></div>
+
+    <main class="shell">
+      <div class="page-header">
+        <div>
+          <p class="eyebrow"><a href="./merchants.html" style="color:#94a3b8;text-decoration:none;">← 商户列表</a></p>
+          <h1 id="merchantTitle">加载中...</h1>
+          <p class="subtle" id="merchantMeta">—</p>
+        </div>
+        <div style="display:flex; gap: 10px;">
+          <button id="rotateSecretBtn" class="ghost-button" type="button">重置 Secret</button>
+          <button id="toggleStatusBtn" class="ghost-button" type="button">禁用</button>
+        </div>
+      </div>
+
+      <section class="kpi-grid" style="grid-template-columns: repeat(4, minmax(0, 1fr));">
+        <div class="kpi-card"><span class="kpi-label">总下注</span><span class="kpi-value" data-kpi="totalBet">—</span></div>
+        <div class="kpi-card"><span class="kpi-label">总中奖</span><span class="kpi-value" data-kpi="totalWin">—</span></div>
+        <div class="kpi-card"><span class="kpi-label">GGR</span><span class="kpi-value" data-kpi="ggr">—</span></div>
+        <div class="kpi-card"><span class="kpi-label">实际 RTP</span><span class="kpi-value" data-kpi="rtp">—</span></div>
+        <div class="kpi-card"><span class="kpi-label">玩家数</span><span class="kpi-value" data-kpi="playerCount">—</span></div>
+        <div class="kpi-card"><span class="kpi-label">玩家余额合计</span><span class="kpi-value" data-kpi="totalScore">—</span></div>
+        <div class="kpi-card"><span class="kpi-label">交易笔数</span><span class="kpi-value" data-kpi="txnCount">—</span></div>
+        <div class="kpi-card"><span class="kpi-label">活跃用户数</span><span class="kpi-value" data-kpi="userCount">—</span></div>
+      </section>
+
+      <div class="tabs">
+        <button class="tab is-active" data-tab="games">可用游戏</button>
+        <button class="tab" data-tab="strategy">策略配置(本游戏)</button>
+        <button class="tab" data-tab="tier">分级下注 (本游戏)</button>
+        <button class="tab" data-tab="codes">测试 Code</button>
+        <button class="tab" data-tab="txns">流水</button>
+        <button class="tab" data-tab="players">玩家</button>
+      </div>
+
+      <!-- Tab 0: 可用游戏 -->
+      <section class="tab-panel is-active" data-panel="games">
+        <div class="panel">
+          <div class="panel-title">
+            <h2>本商户的可用游戏</h2>
+            <span id="gamesTabStatus" class="status">就绪</span>
+          </div>
+          <p class="subtle" style="margin-bottom: 16px;">
+            勾选的游戏才能被本商户的玩家访问;<code>POST /api/merchant/launch</code> 会校验。
+          </p>
+          <div id="gameWhitelist" class="cards empty">加载中...</div>
+        </div>
+      </section>
+
+      <!-- 策略/Tier/Code 共用的游戏选择器 -->
+      <div id="gameSelectorBar" class="panel" style="display:none;margin-top:18px;padding:14px 16px;">
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+          <strong style="color:#fbbf24;">当前游戏:</strong>
+          <select id="gameSelector" style="background:#0f1729;color:#e2e8f0;border:1px solid #334155;border-radius:6px;padding:6px 10px;min-width:240px;font-weight:600;"></select>
+          <span class="subtle" id="gameSelectorHint">— 切换后下方的策略 / Tier / Code 都会重新加载</span>
+        </div>
+      </div>
+
+      <!-- Tab 1: 策略配置(per game) -->
+      <section class="tab-panel" data-panel="strategy">
+        <div class="panel">
+          <div class="panel-title">
+            <h2>策略配置(本商户 × 当前游戏)</h2>
+            <span id="strategyStatus" class="status">未加载</span>
+          </div>
+          <p class="subtle" style="margin-bottom: 16px;">
+            优先级:本商户×本游戏 &gt; 本游戏默认 &gt; 全局兜底。
+            <code>bigWinMultiplier</code> 也决定大奖动画阈值。
+          </p>
+          <form id="strategyForm" class="form-grid">
+            <label>大奖动画阈值(倍数)<input name="bigWinMultiplier" type="number" min="1" max="1000" step="1" /></label>
+            <label>返奖率 RTP(0-1)<input name="rtpTarget" type="number" min="0.5" max="1.5" step="0.01" /></label>
+            <label>RTP 容差<input name="rtpTolerance" type="number" min="0" max="0.3" step="0.01" /></label>
+            <label>单局封顶倍数<input name="maxWinMultiplier" type="number" min="10" max="100000" step="10" /></label>
+          </form>
+
+          <h3 style="margin-top:24px;">新手保护期(前 N 局给玩家更高中奖率)</h3>
+          <p class="subtle" style="margin-bottom: 12px;">
+            玩家 spin_count &lt; 下方 <code>spins</code> 时走 new-user-* 路径。
+            出保护期后回到 base + Bet-Tier 路径,RTP 收敛到 <code>rtpTarget</code>。
+          </p>
+          <form id="newUserForm" class="form-grid">
+            <label>保护期局数(spins)<input name="spins" type="number" min="0" max="1000" step="1" /></label>
+            <label>第 1 局中奖率<input name="firstSpinWinChance" type="number" min="0" max="1" step="0.01" /></label>
+            <label>前 25% 局中奖率(early)<input name="earlyWinChance" type="number" min="0" max="1" step="0.01" /></label>
+            <label>25-75% 局中奖率(mid)<input name="midWinChance" type="number" min="0" max="1" step="0.01" /></label>
+            <label>75-100% 局中奖率(late)<input name="lateWinChance" type="number" min="0" max="1" step="0.01" /></label>
+            <label>新手期目标倍数下限<input name="targetWinMultiplierMin" type="number" min="0.1" max="1000" step="0.1" /></label>
+            <label>新手期目标倍数上限<input name="targetWinMultiplierMax" type="number" min="0.1" max="1000" step="0.1" /></label>
+            <label>新手期单局封顶倍数<input name="newUserMaxWin" type="number" min="0.1" max="1000" step="0.1" /></label>
+          </form>
+
+          <button id="saveAllStrategyBtn" class="primary-button wide" style="margin-top:16px;" type="button">保存全部策略</button>
+        </div>
+      </section>
+
+      <!-- Tab 2: Bet Tier(per game) -->
+      <section class="tab-panel" data-panel="tier">
+        <div class="panel">
+          <div class="panel-title">
+            <h2>分级下注策略(本商户 × 当前游戏)</h2>
+            <span id="tierStatus" class="status">未加载</span>
+          </div>
+          <form id="tierForm" class="tier-form">
+            <div class="tier-bounds">
+              <label>小注边界(≤ 走 Low)<input name="lowMaxBet" type="number" min="1" step="1" /></label>
+              <label>中注边界(≤ 走 Mid,&gt; 走 High)<input name="midMaxBet" type="number" min="1" step="1" /></label>
+            </div>
+
+            <div class="tier-row" data-tier="low">
+              <h3 class="tier-name">Low — 小注玩家</h3>
+              <div class="tier-grid">
+                <label>Force-Win 概率<input name="forceWinChance" type="number" min="0" max="1" step="0.01" /></label>
+                <label>Near-Miss 概率<input name="nearMissChance" type="number" min="0" max="1" step="0.01" /></label>
+                <label>目标倍数下限<input name="targetWinMultiplierMin" type="number" min="0.1" step="0.1" /></label>
+                <label>目标倍数上限<input name="targetWinMultiplierMax" type="number" min="0.1" step="0.1" /></label>
+                <label>盈余阈值(× bet)<input name="surplusBetMultiplier" type="number" min="0.5" step="0.5" /></label>
+                <label>亏损阈值(× bet)<input name="deficitBetMultiplier" type="number" min="0.5" step="0.5" /></label>
+                <label>大奖触发权重<input name="bigWinBoost" type="number" min="0.1" max="10" step="0.1" /></label>
+              </div>
+            </div>
+            <div class="tier-row" data-tier="mid">
+              <h3 class="tier-name">Mid — 中注玩家</h3>
+              <div class="tier-grid">
+                <label>Force-Win 概率<input name="forceWinChance" type="number" min="0" max="1" step="0.01" /></label>
+                <label>Near-Miss 概率<input name="nearMissChance" type="number" min="0" max="1" step="0.01" /></label>
+                <label>目标倍数下限<input name="targetWinMultiplierMin" type="number" min="0.1" step="0.1" /></label>
+                <label>目标倍数上限<input name="targetWinMultiplierMax" type="number" min="0.1" step="0.1" /></label>
+                <label>盈余阈值(× bet)<input name="surplusBetMultiplier" type="number" min="0.5" step="0.5" /></label>
+                <label>亏损阈值(× bet)<input name="deficitBetMultiplier" type="number" min="0.5" step="0.5" /></label>
+                <label>大奖触发权重<input name="bigWinBoost" type="number" min="0.1" max="10" step="0.1" /></label>
+              </div>
+            </div>
+            <div class="tier-row" data-tier="high">
+              <h3 class="tier-name">High — 大注/Whale</h3>
+              <div class="tier-grid">
+                <label>Force-Win 概率<input name="forceWinChance" type="number" min="0" max="1" step="0.01" /></label>
+                <label>Near-Miss 概率<input name="nearMissChance" type="number" min="0" max="1" step="0.01" /></label>
+                <label>目标倍数下限<input name="targetWinMultiplierMin" type="number" min="0.1" step="0.1" /></label>
+                <label>目标倍数上限<input name="targetWinMultiplierMax" type="number" min="0.1" step="0.1" /></label>
+                <label>盈余阈值(× bet)<input name="surplusBetMultiplier" type="number" min="0.5" step="0.5" /></label>
+                <label>亏损阈值(× bet)<input name="deficitBetMultiplier" type="number" min="0.5" step="0.5" /></label>
+                <label>大奖触发权重<input name="bigWinBoost" type="number" min="0.1" max="10" step="0.1" /></label>
+              </div>
+            </div>
+
+            <button class="primary-button" type="submit">保存分级策略</button>
+          </form>
+        </div>
+      </section>
+
+      <!-- Tab 3: 测试 Code(per game) -->
+      <section class="tab-panel" data-panel="codes">
+        <div class="panel">
+          <div class="panel-title">
+            <h2>生成测试 Code(当前游戏)</h2>
+            <span id="codeStatus" class="status">就绪</span>
+          </div>
+          <p class="subtle" style="margin-bottom: 16px;">
+            生成的 code 会自动绑定本商户 + 当前选中游戏,QA 打开 <code>playUrl</code> 即进对应游戏。
+          </p>
+          <form id="codeForm" class="form-grid">
+            <label>生成游戏<select id="codeGameSelector" name="gameId" style="background:#0f1729;color:#e2e8f0;border:1px solid #334155;border-radius:6px;padding:6px 10px;min-width:240px;font-weight:600;"></select></label>
+            <label>Code 前缀<input name="prefix" value="qa-test" maxlength="40" /></label>
+            <label>生成数量<input name="count" type="number" min="1" max="100" value="1" /></label>
+            <label>场景标签<input name="scenario" value="new-user-journey" maxlength="40" /></label>
+            <label class="wide">备注<input name="note" placeholder="给 QA 测试xxx" maxlength="200" /></label>
+            <button class="primary-button" type="submit">生成 Code</button>
+          </form>
+          <h3 style="margin-top:18px;">最近生成</h3>
+          <div id="codeList" class="cards empty" style="margin-top: 8px;">还没有 code。</div>
+        </div>
+      </section>
+
+      <!-- Tab 4: 流水(可全游戏) -->
+      <section class="tab-panel" data-panel="txns">
+        <div class="panel">
+          <div class="panel-title">
+            <h2>流水</h2>
+            <div style="display:flex;gap:10px;align-items:center;">
+              <label class="subtle" style="display:flex;gap:6px;align-items:center;">
+                游戏:
+                <select id="txnGameFilter" style="background:#0f1729;color:#e2e8f0;border:1px solid #334155;border-radius:6px;padding:4px 8px;">
+                  <option value="">全部游戏</option>
+                </select>
+              </label>
+              <button id="refreshTxns" class="ghost-button" type="button">刷新</button>
+            </div>
+          </div>
+          <div id="txnList" class="txn-table-wrap empty"><p class="subtle">加载中...</p></div>
+        </div>
+      </section>
+
+      <!-- Tab 5: 玩家 -->
+      <section class="tab-panel" data-panel="players">
+        <div class="panel">
+          <div class="panel-title">
+            <h2>玩家</h2>
+            <button id="refreshPlayers" class="ghost-button" type="button">刷新</button>
+          </div>
+          <div id="playerList" class="txn-table-wrap empty"><p class="subtle">加载中...</p></div>
+        </div>
+      </section>
+    </main>
+
+    <script src="./shared.js"></script>
+    <script>
+      (function () {
+        YBAdmin.bootstrapNav("merchants");
+
+        const merchantId = YBAdmin.getQueryParam("id");
+        if (!merchantId) {
+          window.location.replace("./merchants.html");
+          return;
+        }
+
+        const STRATEGY_FIELDS = ["bigWinMultiplier", "rtpTarget", "rtpTolerance", "maxWinMultiplier"];
+        const NEW_USER_FIELDS = [
+          "spins", "firstSpinWinChance", "earlyWinChance", "midWinChance", "lateWinChance",
+          "targetWinMultiplierMin", "targetWinMultiplierMax"
+        ];
+        const TIER_NAMES = ["low", "mid", "high"];
+        const TIER_FIELDS = [
+          "forceWinChance", "nearMissChance",
+          "targetWinMultiplierMin", "targetWinMultiplierMax",
+          "surplusBetMultiplier", "deficitBetMultiplier", "bigWinBoost"
+        ];
+
+        // 当前选中的 gameId(给策略/Tier/Code 用)
+        let currentGameId = null;
+        // 商户 enabled 的 gameId 列表
+        let enabledGameIds = [];
+
+        const gameSelectorBar = document.getElementById("gameSelectorBar");
+        const gameSelector = document.getElementById("gameSelector");
+
+        // Tabs
+        document.querySelectorAll(".tab").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            document.querySelectorAll(".tab").forEach((b) => b.classList.remove("is-active"));
+            document.querySelectorAll(".tab-panel").forEach((p) => p.classList.remove("is-active"));
+            btn.classList.add("is-active");
+            const tabId = btn.dataset.tab;
+            document.querySelector(`[data-panel="${tabId}"]`).classList.add("is-active");
+            // 在策略 / Tier / Code 这几个 tab 才显示游戏选择条
+            const needsGame = ["strategy", "tier", "codes"].includes(tabId);
+            gameSelectorBar.style.display = needsGame ? "block" : "none";
+          });
+        });
+
+        // ========== 商户头部 + KPI ==========
+        async function loadOverview() {
+          try {
+            const data = await YBAdmin.fetchJson(`/api/admin/merchants/${encodeURIComponent(merchantId)}/overview`);
+            const m = data.merchant;
+            document.getElementById("merchantTitle").textContent = `${m.name}`;
+            document.getElementById("merchantMeta").innerHTML =
+              `<code>${YBAdmin.escapeHtml(m.merchantId)}</code> · ` +
+              YBAdmin.statusBadge(m.status) + " · " +
+              `IP: ${m.ipWhitelist ? YBAdmin.escapeHtml(m.ipWhitelist) : "不限"} · ` +
+              `创建于 ${YBAdmin.escapeHtml(m.createdAt)}`;
+            document.getElementById("toggleStatusBtn").textContent = m.status === "active" ? "禁用" : "启用";
+
+            const s = data.summary;
+            document.querySelector('[data-kpi="totalBet"]').textContent = YBAdmin.fmtNumber(s.totalBet);
+            document.querySelector('[data-kpi="totalWin"]').textContent = YBAdmin.fmtNumber(s.totalWin);
+            document.querySelector('[data-kpi="ggr"]').textContent = YBAdmin.fmtNumber(s.ggr);
+            document.querySelector('[data-kpi="rtp"]').textContent = YBAdmin.fmtRtp(s.rtp);
+            document.querySelector('[data-kpi="txnCount"]').textContent = YBAdmin.fmtNumber(s.txnCount);
+            document.querySelector('[data-kpi="userCount"]').textContent = YBAdmin.fmtNumber(s.userCount);
+            document.querySelector('[data-kpi="playerCount"]').textContent = YBAdmin.fmtNumber(data.players.count);
+            document.querySelector('[data-kpi="totalScore"]').textContent = YBAdmin.fmtNumber(data.players.totalScore);
+
+            renderTxns(data.recentTxns || []);
+          } catch (e) {
+            document.getElementById("merchantTitle").textContent = "加载失败:" + e.message;
+          }
+        }
+
+        // ========== 可用游戏 Tab ==========
+        const gameWlEl = document.getElementById("gameWhitelist");
+        const gamesTabStatus = document.getElementById("gamesTabStatus");
+
+        async function loadGameWhitelist() {
+          try {
+            const allGames = await YBAdmin.loadAllGames();
+            const r = await YBAdmin.fetchJson(`/api/admin/merchants/${encodeURIComponent(merchantId)}/games`);
+            const enabledMap = new Map();
+            (r.items || []).forEach((row) => enabledMap.set(row.gameId, row.enabled));
+            enabledGameIds = (r.items || []).filter((row) => row.enabled).map((row) => row.gameId);
+            if (!allGames.length) {
+              gameWlEl.classList.add("empty");
+              gameWlEl.innerHTML = '<p class="subtle">平台还没有游戏。先去 <a href="./games.html">游戏库</a> 注册一个。</p>';
+            } else {
+              gameWlEl.classList.remove("empty");
+              gameWlEl.innerHTML = allGames.map((g) => {
+                const enabled = enabledMap.get(g.gameId) === true;
+                const recordExists = enabledMap.has(g.gameId);
+                return `
+                  <article class="code-card">
+                    <div>
+                      <p class="code-value">${YBAdmin.escapeHtml(g.name)}</p>
+                      <p class="meta">
+                        <code>${YBAdmin.escapeHtml(g.gameId)}</code> ·
+                        ${YBAdmin.statusBadge(g.status)} ·
+                        资源 <code>${YBAdmin.escapeHtml(g.assetUrl)}</code>
+                        ${recordExists ? "" : ' · <span class="subtle">未配置</span>'}
+                      </p>
+                    </div>
+                    <div class="actions">
+                      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:700;">
+                        <input type="checkbox" data-game-toggle="${YBAdmin.escapeHtml(g.gameId)}" ${enabled ? "checked" : ""} />
+                        ${enabled ? "已开通" : "未开通"}
+                      </label>
+                      ${enabled ? `<a class="open-link" href="./game.html?id=${encodeURIComponent(g.gameId)}">游戏详情 →</a>` : ""}
+                    </div>
+                  </article>
+                `;
+              }).join("");
+              gameWlEl.querySelectorAll("[data-game-toggle]").forEach((cb) => {
+                cb.addEventListener("change", async () => {
+                  const gid = cb.getAttribute("data-game-toggle");
+                  const enabled = cb.checked;
+                  cb.disabled = true;
+                  YBAdmin.setStatusOn(gamesTabStatus, "保存中...");
+                  try {
+                    const r2 = await fetch(YBAdmin.apiUrl(`/api/admin/merchants/${encodeURIComponent(merchantId)}/games`), {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ gameId: gid, enabled })
+                    });
+                    const d2 = await r2.json();
+                    if (!d2.ok) throw new Error(d2.error || "save failed");
+                    YBAdmin.setStatusOn(gamesTabStatus, enabled ? "已开通" : "已关闭");
+                    await loadGameWhitelist();
+                    rebuildGameSelectors();
+                  } catch (e) {
+                    cb.checked = !enabled;
+                    YBAdmin.setStatusOn(gamesTabStatus, e.message, false);
+                  } finally {
+                    cb.disabled = false;
+                  }
+                });
+              });
+            }
+            rebuildGameSelectors();
+          } catch (e) {
+            gameWlEl.textContent = "加载失败:" + e.message;
+          }
+        }
+
+        function rebuildGameSelectors() {
+          // 主选择器(策略/Tier/Code 用):只显示 enabled 的游戏
+          const allGames = (window.__gamesCache || []);
+          const enabledGames = allGames.filter((g) => enabledGameIds.includes(g.gameId));
+          const prev = currentGameId;
+          if (!enabledGames.length) {
+            gameSelector.innerHTML = '<option value="">— 请先开通游戏 —</option>';
+            codeGameSelector.innerHTML = '<option value="">— 请先开通游戏 —</option>';
+            codeGameSelector.disabled = true;
+            currentGameId = null;
+          } else {
+            const gameOptions = enabledGames.map((g) =>
+              `<option value="${YBAdmin.escapeHtml(g.gameId)}">${YBAdmin.escapeHtml(g.name)} (${YBAdmin.escapeHtml(g.gameId)})</option>`
+            ).join("");
+            gameSelector.innerHTML = gameOptions;
+            codeGameSelector.innerHTML = gameOptions;
+            codeGameSelector.disabled = false;
+            if (prev && enabledGames.find((g) => g.gameId === prev)) {
+              currentGameId = prev;
+              gameSelector.value = prev;
+              codeGameSelector.value = prev;
+            } else {
+              currentGameId = enabledGames[0].gameId;
+              gameSelector.value = currentGameId;
+              codeGameSelector.value = currentGameId;
+            }
+          }
+
+          // 流水 game 过滤器:全平台所有游戏(不限于本商户开通)
+          const txnSel = document.getElementById("txnGameFilter");
+          const prevTxn = txnSel.value;
+          txnSel.innerHTML = '<option value="">全部游戏</option>' + allGames.map((g) =>
+            `<option value="${YBAdmin.escapeHtml(g.gameId)}">${YBAdmin.escapeHtml(g.name)}</option>`
+          ).join("");
+          if (prevTxn) txnSel.value = prevTxn;
+
+          reloadCurrentGameData();
+        }
+
+        function selectCurrentGame(gameId) {
+          currentGameId = gameId || null;
+          gameSelector.value = currentGameId || "";
+          codeGameSelector.value = currentGameId || "";
+          reloadCurrentGameData();
+        }
+
+        function reloadCurrentGameData() {
+          if (currentGameId) {
+            loadStrategy();
+            loadCodes();
+          } else {
+            loadCodes();
+          }
+        }
+
+        gameSelector.addEventListener("change", () => {
+          selectCurrentGame(gameSelector.value);
+        });
+
+        // ========== 策略 + Tier Tab(per game) ==========
+        const strategyForm = document.getElementById("strategyForm");
+        const newUserForm = document.getElementById("newUserForm");
+        const strategyStatus = document.getElementById("strategyStatus");
+        const tierForm = document.getElementById("tierForm");
+        const tierStatus = document.getElementById("tierStatus");
+
+        async function loadStrategy() {
+          if (!currentGameId) return;
+          try {
+            const data = await YBAdmin.fetchJson(`/api/admin/merchants/${encodeURIComponent(merchantId)}/games/${encodeURIComponent(currentGameId)}/strategy`);
+            const s = data.strategy;
+            STRATEGY_FIELDS.forEach((f) => {
+              const inp = strategyForm.querySelector(`[name="${f}"]`);
+              if (inp && s[f] !== undefined) inp.value = s[f];
+            });
+            // 新手保护
+            const nu = s.newUserProtection || {};
+            NEW_USER_FIELDS.forEach((f) => {
+              const inp = newUserForm.querySelector(`[name="${f}"]`);
+              if (inp && nu[f] !== undefined) inp.value = nu[f];
+            });
+            const newUserMaxWinInput = newUserForm.querySelector('[name="newUserMaxWin"]');
+            if (newUserMaxWinInput && nu.maxWinMultiplier !== undefined) {
+              newUserMaxWinInput.value = nu.maxWinMultiplier;
+            }
+            if (s.betTiers) {
+              tierForm.querySelector('[name="lowMaxBet"]').value = s.betTiers.lowMaxBet;
+              tierForm.querySelector('[name="midMaxBet"]').value = s.betTiers.midMaxBet;
+              TIER_NAMES.forEach((tname) => {
+                const row = tierForm.querySelector(`[data-tier="${tname}"]`);
+                if (!row) return;
+                const cfg = s.betTiers[tname] || {};
+                TIER_FIELDS.forEach((f) => {
+                  const inp = row.querySelector(`[name="${f}"]`);
+                  if (inp && cfg[f] !== undefined) inp.value = cfg[f];
+                });
+              });
+            }
+            const lbl = data.hasOverride ? "已加载(本商户×本游戏 override)" : "未自定义,使用游戏默认/全局兜底";
+            YBAdmin.setStatusOn(strategyStatus, lbl);
+            YBAdmin.setStatusOn(tierStatus, lbl);
+          } catch (e) {
+            YBAdmin.setStatusOn(strategyStatus, e.message, false);
+          }
+        }
+
+        async function saveStrategy() {
+          if (!currentGameId) {
+            YBAdmin.setStatusOn(strategyStatus, "未选游戏", false);
+            return;
+          }
+          YBAdmin.setStatusOn(strategyStatus, "保存中...");
+          // 顶部 4 个全局策略字段
+          const payload = {};
+          STRATEGY_FIELDS.forEach((f) => {
+            const v = Number(strategyForm.querySelector(`[name="${f}"]`).value);
+            if (Number.isFinite(v)) payload[f] = v;
+          });
+          // 新手保护期子对象
+          const newUserPatch = {};
+          NEW_USER_FIELDS.forEach((f) => {
+            const v = Number(newUserForm.querySelector(`[name="${f}"]`).value);
+            if (Number.isFinite(v)) newUserPatch[f] = v;
+          });
+          const newUserMaxV = Number(newUserForm.querySelector('[name="newUserMaxWin"]').value);
+          if (Number.isFinite(newUserMaxV)) newUserPatch.maxWinMultiplier = newUserMaxV;
+          if (Object.keys(newUserPatch).length) payload.newUserProtection = newUserPatch;
+          try {
+            const r = await fetch(YBAdmin.apiUrl(`/api/admin/merchants/${encodeURIComponent(merchantId)}/games/${encodeURIComponent(currentGameId)}/strategy`), {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload)
+            });
+            const data = await r.json();
+            if (!data.ok) throw new Error(data.error || "save failed");
+            YBAdmin.setStatusOn(strategyStatus, "已保存,后端已生效");
+            loadStrategy();
+          } catch (e) {
+            YBAdmin.setStatusOn(strategyStatus, e.message, false);
+          }
+        }
+
+        async function saveTiers(event) {
+          event.preventDefault();
+          if (!currentGameId) {
+            YBAdmin.setStatusOn(tierStatus, "未选游戏", false);
+            return;
+          }
+          YBAdmin.setStatusOn(tierStatus, "保存中...");
+          const payload = { betTiers: { enabled: true } };
+          const lowMax = Number(tierForm.querySelector('[name="lowMaxBet"]').value);
+          const midMax = Number(tierForm.querySelector('[name="midMaxBet"]').value);
+          if (Number.isFinite(lowMax)) payload.betTiers.lowMaxBet = lowMax;
+          if (Number.isFinite(midMax)) payload.betTiers.midMaxBet = midMax;
+          TIER_NAMES.forEach((tname) => {
+            const row = tierForm.querySelector(`[data-tier="${tname}"]`);
+            const obj = {};
+            TIER_FIELDS.forEach((f) => {
+              const v = Number(row.querySelector(`[name="${f}"]`).value);
+              if (Number.isFinite(v)) obj[f] = v;
+            });
+            payload.betTiers[tname] = obj;
+          });
+          try {
+            const r = await fetch(YBAdmin.apiUrl(`/api/admin/merchants/${encodeURIComponent(merchantId)}/games/${encodeURIComponent(currentGameId)}/strategy`), {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload)
+            });
+            const data = await r.json();
+            if (!data.ok) throw new Error(data.error || "save failed");
+            YBAdmin.setStatusOn(tierStatus, "已保存,后端已生效");
+            loadStrategy();
+          } catch (e) {
+            YBAdmin.setStatusOn(tierStatus, e.message, false);
+          }
+        }
+
+        document.getElementById("saveAllStrategyBtn").addEventListener("click", saveStrategy);
+        // form 内 Enter 仍能保存
+        strategyForm.addEventListener("submit", (e) => { e.preventDefault(); saveStrategy(); });
+        newUserForm.addEventListener("submit", (e) => { e.preventDefault(); saveStrategy(); });
+        tierForm.addEventListener("submit", saveTiers);
+
+        // ========== 测试 Code Tab ==========
+        const codeForm = document.getElementById("codeForm");
+        const codeGameSelector = document.getElementById("codeGameSelector");
+        const codeStatus = document.getElementById("codeStatus");
+        const codeListEl = document.getElementById("codeList");
+
+        async function loadCodes() {
+          if (!currentGameId) {
+            codeListEl.classList.add("empty");
+            codeListEl.innerHTML = '<p class="subtle">请先开通并选择游戏。</p>';
+            return;
+          }
+          try {
+            const data = await YBAdmin.fetchJson(`/api/admin/test-codes?merchantId=${encodeURIComponent(merchantId)}&gameId=${encodeURIComponent(currentGameId)}&limit=50`);
+            const codes = data.codes || [];
+            if (!codes.length) {
+              codeListEl.classList.add("empty");
+              codeListEl.innerHTML = '<p class="subtle">还没有测试 code(本游戏)。</p>';
+              return;
+            }
+            codeListEl.classList.remove("empty");
+            codeListEl.innerHTML = codes.map((c) => `
+              <article class="code-card">
+                <div>
+                  <p class="code-value">${YBAdmin.escapeHtml(c.code)}</p>
+                  <p class="meta">
+                    extUserId: ${YBAdmin.escapeHtml(c.externalUserId)} ·
+                    game: <code>${YBAdmin.escapeHtml(c.gameId || "—")}</code> ·
+                    ${YBAdmin.escapeHtml(c.scenario)} ·
+                    ${YBAdmin.escapeHtml(c.createdAt)}
+                    ${c.consumedAt ? ` · 已使用 ${YBAdmin.escapeHtml(c.consumedAt)}` : ""}
+                  </p>
+                </div>
+                <div class="actions">
+                  <button class="copy-code" data-copy="${YBAdmin.escapeHtml(c.code)}" type="button">复制 Code</button>
+                  <button class="copy-link" data-copy="${YBAdmin.escapeHtml(c.playUrl)}" type="button">复制链接</button>
+                  <a class="open-link" target="_blank" rel="noreferrer" href="${YBAdmin.escapeHtml(c.playUrl)}">打开测试</a>
+                </div>
+              </article>
+            `).join("");
+            codeListEl.querySelectorAll("[data-copy]").forEach((btn) => {
+              btn.addEventListener("click", async () => {
+                try {
+                  await navigator.clipboard.writeText(btn.getAttribute("data-copy"));
+                  YBAdmin.setStatusOn(codeStatus, "已复制");
+                } catch (e) { /* ignore */ }
+              });
+            });
+          } catch (e) {
+            codeListEl.textContent = "加载失败:" + e.message;
+          }
+        }
+
+        async function onCreateCode(event) {
+          event.preventDefault();
+          currentGameId = codeGameSelector.value || null;
+          gameSelector.value = currentGameId || "";
+          if (!currentGameId) {
+            YBAdmin.setStatusOn(codeStatus, "未选游戏", false);
+            return;
+          }
+          YBAdmin.setStatusOn(codeStatus, "生成中...");
+          const fd = new FormData(codeForm);
+          const payload = {
+            merchantId,
+            gameId: currentGameId,
+            prefix: fd.get("prefix"),
+            count: Number(fd.get("count")),
+            scenario: fd.get("scenario"),
+            note: fd.get("note")
+          };
+          try {
+            const r = await fetch(YBAdmin.apiUrl("/api/admin/test-codes/generate"), {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload)
+            });
+            const data = await r.json();
+            if (!data.ok) throw new Error(data.error || "generate failed");
+            YBAdmin.setStatusOn(codeStatus, `已生成 ${data.count} 个`);
+            loadCodes();
+          } catch (e) {
+            YBAdmin.setStatusOn(codeStatus, e.message, false);
+          }
+        }
+
+        codeGameSelector.addEventListener("change", () => {
+          selectCurrentGame(codeGameSelector.value);
+        });
+        codeForm.addEventListener("submit", onCreateCode);
+
+        // ========== 流水 Tab ==========
+        const txnList = document.getElementById("txnList");
+
+        function renderTxns(items) {
+          if (!items || !items.length) {
+            txnList.classList.add("empty");
+            txnList.innerHTML = '<p class="subtle">还没有流水。</p>';
+            return;
+          }
+          txnList.classList.remove("empty");
+          const rows = items.map((t) => `
+            <tr>
+              <td><code>${YBAdmin.escapeHtml(t.txn_id)}</code></td>
+              <td>${YBAdmin.escapeHtml(t.external_user_id)}</td>
+              <td><code>${YBAdmin.escapeHtml(t.game_id || "—")}</code></td>
+              <td><span class="txn-type txn-type-${t.type}">${t.type}</span></td>
+              <td class="num">${YBAdmin.fmtNumber(t.amount)}</td>
+              <td class="num">${YBAdmin.fmtNumber(t.balance_after)}</td>
+              <td>${YBAdmin.escapeHtml(t.created_at)}</td>
+            </tr>
+          `).join("");
+          txnList.innerHTML = `
+            <table class="txn-table">
+              <thead><tr>
+                <th>txn_id</th><th>用户</th><th>游戏</th><th>类型</th>
+                <th class="num">金额</th><th class="num">余额(后)</th><th>时间</th>
+              </tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+          `;
+        }
+
+        async function loadTxns() {
+          try {
+            const gid = document.getElementById("txnGameFilter").value;
+            const params = new URLSearchParams({ merchantId, limit: "200" });
+            if (gid) params.set("gameId", gid);
+            const data = await YBAdmin.fetchJson(`/api/admin/transactions?${params.toString()}`);
+            renderTxns(data.items || []);
+          } catch (e) {
+            txnList.textContent = "加载失败:" + e.message;
+          }
+        }
+        document.getElementById("refreshTxns").addEventListener("click", loadTxns);
+        document.getElementById("txnGameFilter").addEventListener("change", loadTxns);
+
+        // ========== 玩家 Tab ==========
+        const playerList = document.getElementById("playerList");
+        async function loadPlayers() {
+          try {
+            const data = await YBAdmin.fetchJson(`/api/admin/merchants/${encodeURIComponent(merchantId)}/players?limit=100`);
+            const items = data.items || [];
+            if (!items.length) {
+              playerList.classList.add("empty");
+              playerList.innerHTML = '<p class="subtle">还没有玩家。</p>';
+              return;
+            }
+            playerList.classList.remove("empty");
+            const rows = items.map((p) => `
+              <tr>
+                <td><code>${YBAdmin.escapeHtml(p.external_user_id)}</code></td>
+                <td><code>${YBAdmin.escapeHtml(p.game_id || "—")}</code></td>
+                <td>${YBAdmin.escapeHtml(p.nickname)}</td>
+                <td class="num">${YBAdmin.fmtNumber(p.score)}</td>
+                <td class="num">${YBAdmin.fmtNumber(p.spin_count)}</td>
+                <td class="num">${YBAdmin.fmtNumber(p.total_bet)}</td>
+                <td class="num">${YBAdmin.fmtNumber(p.total_won)}</td>
+                <td class="num">${p.total_bet > 0 ? YBAdmin.fmtRtp(p.total_won / p.total_bet) : "—"}</td>
+                <td>${YBAdmin.escapeHtml(p.updated_at)}</td>
+              </tr>
+            `).join("");
+            playerList.innerHTML = `
+              <table class="txn-table">
+                <thead><tr>
+                  <th>外部 ID</th><th>游戏</th><th>昵称</th>
+                  <th class="num">余额</th><th class="num">轮数</th>
+                  <th class="num">累计下注</th><th class="num">累计中奖</th><th class="num">RTP</th><th>最近活跃</th>
+                </tr></thead>
+                <tbody>${rows}</tbody>
+              </table>
+            `;
+          } catch (e) {
+            playerList.textContent = "加载失败:" + e.message;
+          }
+        }
+        document.getElementById("refreshPlayers").addEventListener("click", loadPlayers);
+
+        // ========== 顶部按钮 ==========
+        document.getElementById("rotateSecretBtn").addEventListener("click", async () => {
+          if (!window.confirm(`确定重置 ${merchantId} 的 secret? 旧 secret 立即失效。`)) return;
+          try {
+            const r = await fetch(YBAdmin.apiUrl(`/api/admin/merchants/${encodeURIComponent(merchantId)}/rotate`), { method: "POST" });
+            const data = await r.json();
+            if (!data.ok) throw new Error(data.error);
+            window.alert(`新 Secret(只显示这一次):\n${data.secret}`);
+          } catch (e) { window.alert("失败:" + e.message); }
+        });
+
+        document.getElementById("toggleStatusBtn").addEventListener("click", async () => {
+          const btn = document.getElementById("toggleStatusBtn");
+          const newStatus = btn.textContent.trim() === "禁用" ? "disabled" : "active";
+          try {
+            const r = await fetch(YBAdmin.apiUrl(`/api/admin/merchants/${encodeURIComponent(merchantId)}/update`), {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ status: newStatus })
+            });
+            const data = await r.json();
+            if (!data.ok) throw new Error(data.error);
+            loadOverview();
+          } catch (e) { window.alert("失败:" + e.message); }
+        });
+
+        // 初始化
+        (async () => {
+          // 缓存所有游戏(供 selector 用)
+          window.__gamesCache = await YBAdmin.loadAllGames();
+          await loadOverview();
+          await loadGameWhitelist();
+          loadTxns();
+          loadPlayers();
+        })();
+      })();
+    </script>
+  </body>
+</html>
