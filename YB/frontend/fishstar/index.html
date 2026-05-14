@@ -5,34 +5,29 @@
     <meta name="viewport" content="width=device-width,user-scalable=no,initial-scale=1,minimum-scale=1,maximum-scale=1,viewport-fit=cover" />
     <meta name="theme-color" content="#000000" />
     <title>Fishing Star</title>
-    <meta name="description" content="FishStar local client using original package assets." />
-    <link rel="stylesheet" href="/fishstar/styles.css" />
+    <meta name="description" content="FishStar original package entry." />
+    <meta http-equiv="refresh" content="0;url=https://game-center-test.jieyou.shop/game-packages/common-web/fishing/3.5.3/web-mobile/index.html?gsp=101&sceneMode=2&adaption=1&currencyIcon=https%3A%2F%2Fzykj-common-resources.s3.ap-southeast-1.amazonaws.com%2Fgame%2FdiamondIcon.png&aspectRatio=1&gameMode=2&gameId=FishStar&appId=7990057035&appChannel=chatna&roomId=85422171&userId=40002157&lang=2&code=3489b80a-925c-413b-8813-8c8d7b0fa14e&gameId=FishStar" />
+    <style>
+      html, body {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: #000;
+      }
+      body {
+        display: grid;
+        place-items: center;
+        color: #fff;
+        font: 14px/1.5 Arial, sans-serif;
+      }
+      a { color: #67e8f9; }
+    </style>
   </head>
-  <body class="is-booting">
-    <canvas id="GameCanvas" oncontextmenu="event.preventDefault()" tabindex="0"></canvas>
-
-    <div id="splash">
-      <div class="progress-bar stripes"><span id="bootProgress" style="width:0%"></span></div>
-      <img id="loadingGif" alt="Loading" />
-      <p id="loadingTxt">Loading, please wait patiently</p>
-    </div>
-
-    <div id="hudLayer" aria-live="polite">
-      <span id="launchStatus" class="sr-status">Loading FishStar package.</span>
-      <div id="controlHitTargets">
-        <button id="decreaseBet" class="canvas-hit-target" type="button" aria-label="Decrease bet"></button>
-        <button id="increaseBet" class="canvas-hit-target" type="button" aria-label="Increase bet"></button>
-        <button id="fireButton" class="canvas-hit-target" type="button" aria-label="Fire"></button>
-        <button id="syncButton" class="canvas-hit-target" type="button" aria-label="Sync balance"></button>
-        <button id="historyButton" class="canvas-hit-target" type="button" aria-label="History"></button>
-        <button id="muteButton" class="canvas-hit-target" type="button" aria-label="Toggle sound"></button>
-      </div>
-      <div id="historyPanel" class="history-panel">
-        <button id="closeHistory" type="button">×</button>
-        <ul id="historyList"></ul>
-      </div>
-    </div>
-
-    <script type="module" src="/fishstar/launcher.js"></script>
+  <body>
+    <p>Opening FishStar... <a id="fallback" href="https://game-center-test.jieyou.shop/game-packages/common-web/fishing/3.5.3/web-mobile/index.html?gsp=101&sceneMode=2&adaption=1&currencyIcon=https%3A%2F%2Fzykj-common-resources.s3.ap-southeast-1.amazonaws.com%2Fgame%2FdiamondIcon.png&aspectRatio=1&gameMode=2&gameId=FishStar&appId=7990057035&appChannel=chatna&roomId=85422171&userId=40002157&lang=2&code=3489b80a-925c-413b-8813-8c8d7b0fa14e&gameId=FishStar">open manually</a></p>
+    <script>
+      window.location.replace(document.getElementById("fallback").href);
+    </script>
   </body>
 </html>
