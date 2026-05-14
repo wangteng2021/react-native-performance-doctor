@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>游戏 · WTNS Gaming Admin</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div id="topNav"></div>
+
+    <main class="shell">
+      <div class="page-header">
+        <div>
+          <h1>游戏库</h1>
+          <p class="subtle">平台支持的游戏。每个游戏可以有自己的默认策略;商户在自己详情页里勾选可用游戏。</p>
+        </div>
+        <button id="toggleNew" class="primary-button" type="button">+ 新增游戏</button>
+      </div>
+
+      <section id="newGamePanel" class="panel" style="display:none;">
+        <div class="panel-title">
+          <h2>注册新游戏</h2>
+        </div>
+        <form id="newGameForm" class="form-grid">
+          <label>
+            游戏 ID
+            <input name="gameId" placeholder="e.g. pinata-fiesta-wins" maxlength="64" required />
+            <span class="hint">2-64 位小写字母/数字/下划线/横杠;一旦创建不可改</span>
+          </label>
+          <label>
+            显示名
+            <input name="name" placeholder="Pinata Fiesta Wins" maxlength="100" required />
+          </label>
+          <label>
+            类型
+            <input name="type" placeholder="video-slot" value="video-slot" maxlength="40" />
+          </label>
+          <label>
+            前端资源 URL
+            <input name="assetUrl" placeholder="/pinatawins/index.html" required />
+            <span class="hint">玩家访问 /embed?token=… 时会被重定向到这里</span>
+          </label>
+          <label class="wide">
+            图标 URL(可选)
+            <input name="iconUrl" placeholder="/pinatawins/icon.png" />
+          </label>
+          <label class="wide">
+            描述
+            <textarea name="description" rows="2" placeholder="一句话描述,给商户看的"></textarea>
+          </label>
+          <button class="primary-button wide" type="submit">注册游戏</button>
+        </form>
+      </section>
+
+      <section id="gameList" class="cards empty" style="margin-top: 18px;">加载中...</section>
+    </main>
+
+    <script src="./shared.js"></script>
+    <script>
+      (function () {
+        YBAdmin.bootstrapNav("games");
+
+        const listEl = document.getElementById("gameList");
+        const formPanel = document.getElementById("newGamePanel");
+        const form = document.getElementById("newGameForm");
+        const toggleBtn = document.getElementById("toggleNew");
+
+        toggleBtn.addEventListener("click", () => {
+          formPanel.style.display = formPanel.style.display === "none" ? "block" : "none";
+        });
+
+        async function loadList() {
+          try {
+            const items = await YBAdmin.loadAllGames(true);
+            renderList(items || []);
+          } catch (e) {
+            listEl.textContent = "加载失败:" + e.message;
+          }
+        }
+
+        function renderList(items) {
+          if (!items.length) {
+            listEl.classList.add("empty");
+            listEl.innerHTML = '<p class="subtle">还没有游戏。点上方"新增游戏"创建。</p>';
+            return;
+          }
+          listEl.classList.remove("empty");
+          listEl.innerHTML = items.map((g) => `
+            <a href="./game.html?id=${encodeURIComponent(g.gameId)}" class="merchant-card">
+              <div class="merchant-card-info">
+                <p class="merchant-card-id">${YBAdmin.escapeHtml(g.gameId)}</p>
+                <p class="merchant-card-name">${YBAdmin.escapeHtml(g.name)}</p>
+                <p class="merchant-card-meta">
+                  ${YBAdmin.statusBadge(g.status)} ·
+                  类型 ${YBAdmin.escapeHtml(g.type)} ·
+                  资源 <code>${YBAdmin.escapeHtml(g.assetUrl)}</code>
+                </p>
+                ${g.description ? `<p class="subtle" style="margin-top:6px;">${YBAdmin.escapeHtml(g.description)}</p>` : ""}
+              </div>
+              <div class="merchant-card-stats">
+                <span class="stat">
+                  <span class="kpi-label">点击</span>
+                  <span class="stat-value" style="color:#86efac;">详情 →</span>
+                </span>
+              </div>
+            </a>
+          `).join("");
+        }
+
+        async function onCreate(event) {
+          event.preventDefault();
+          const fd = new FormData(form);
+          const payload = {
+            gameId: fd.get("gameId"),
+            name: fd.get("name"),
+            type: fd.get("type") || "video-slot",
+            assetUrl: fd.get("assetUrl"),
+            iconUrl: fd.get("iconUrl") || "",
+            description: fd.get("description") || ""
+          };
+          try {
+            const r = await fetch(YBAdmin.apiUrl("/api/admin/games"), {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload)
+            });
+            const data = await r.json();
+            if (!data.ok) throw new Error(data.error || "create failed");
+            window.alert(`游戏注册成功:${data.game.gameId}\n\n请记得在商户详情页"可用游戏"里给商户开启它。`);
+            form.reset();
+            formPanel.style.display = "none";
+            loadList();
+          } catch (e) {
+            window.alert("失败:" + e.message);
+          }
+        }
+
+        form.addEventListener("submit", onCreate);
+        loadList();
+      })();
+    </script>
+  </body>
+</html>

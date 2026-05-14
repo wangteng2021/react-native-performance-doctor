@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>流水 · WTNS Gaming Admin</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div id="topNav"></div>
+
+    <main class="shell">
+      <div class="page-header">
+        <div>
+          <h1>全局流水</h1>
+          <p class="subtle">所有商户 × 所有游戏的下注 / 中奖 / 调账记录(SQLite <code>transactions</code> 表)。</p>
+        </div>
+      </div>
+
+      <section class="panel">
+        <form id="filterForm" class="form-grid">
+          <label>商户 ID<input name="merchantId" placeholder="任意" /></label>
+          <label>游戏
+            <select name="gameId">
+              <option value="">任意游戏</option>
+            </select>
+          </label>
+          <label>外部用户 ID<input name="externalUserId" placeholder="任意" /></label>
+          <label>类型
+            <select name="type">
+              <option value="">任意</option>
+              <option value="bet">bet</option>
+              <option value="win">win</option>
+              <option value="adjust">adjust</option>
+            </select>
+          </label>
+          <label>最近 N 条<input name="limit" type="number" min="10" max="500" value="200" /></label>
+          <button class="primary-button" type="submit">查询</button>
+        </form>
+      </section>
+
+      <section class="panel">
+        <div id="txnList" class="txn-table-wrap empty"><p class="subtle">点查询加载…</p></div>
+      </section>
+    </main>
+
+    <script src="./shared.js"></script>
+    <script>
+      (function () {
+        YBAdmin.bootstrapNav("transactions");
+        const form = document.getElementById("filterForm");
+        const txnList = document.getElementById("txnList");
+
+        async function fillGameSelect() {
+          try {
+            const games = await YBAdmin.loadAllGames();
+            const sel = form.querySelector('[name="gameId"]');
+            const initialQ = new URLSearchParams(window.location.search).get("gameId");
+            sel.innerHTML = '<option value="">任意游戏</option>' + games.map((g) =>
+              `<option value="${YBAdmin.escapeHtml(g.gameId)}">${YBAdmin.escapeHtml(g.name)} (${YBAdmin.escapeHtml(g.gameId)})</option>`
+            ).join("");
+            if (initialQ) sel.value = initialQ;
+          } catch (e) { /* ignore */ }
+        }
+
+        function render(items) {
+          if (!items.length) {
+            txnList.classList.add("empty");
+            txnList.innerHTML = '<p class="subtle">没有匹配的流水。</p>';
+            return;
+          }
+          txnList.classList.remove("empty");
+          const rows = items.map((t) => `
+            <tr>
+              <td><code>${YBAdmin.escapeHtml(t.txn_id)}</code></td>
+              <td><a href="./merchant.html?id=${encodeURIComponent(t.merchant_id)}" style="color:#fbbf24;">${YBAdmin.escapeHtml(t.merchant_id)}</a></td>
+              <td><code>${YBAdmin.escapeHtml(t.game_id || "—")}</code></td>
+              <td>${YBAdmin.escapeHtml(t.external_user_id)}</td>
+              <td><span class="txn-type txn-type-${t.type}">${t.type}</span></td>
+              <td class="num">${YBAdmin.fmtNumber(t.amount)}</td>
+              <td class="num">${YBAdmin.fmtNumber(t.balance_after)}</td>
+              <td>${YBAdmin.escapeHtml(t.round_id || "—")}</td>
+              <td>${YBAdmin.escapeHtml(t.created_at)}</td>
+            </tr>
+          `).join("");
+          txnList.innerHTML = `
+            <table class="txn-table">
+              <thead><tr>
+                <th>txn_id</th><th>商户</th><th>游戏</th><th>用户</th><th>类型</th>
+                <th class="num">金额</th><th class="num">余额(后)</th><th>round</th><th>时间</th>
+              </tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+          `;
+        }
+
+        async function load(filters = {}) {
+          const qs = new URLSearchParams();
+          Object.entries(filters).forEach(([k, v]) => { if (v) qs.set(k, v); });
+          try {
+            const data = await YBAdmin.fetchJson(`/api/admin/transactions?${qs.toString()}`);
+            render(data.items || []);
+          } catch (e) {
+            txnList.textContent = "加载失败:" + e.message;
+          }
+        }
+
+        form.addEventListener("submit", (e) => {
+          e.preventDefault();
+          const fd = new FormData(form);
+          load({
+            merchantId: fd.get("merchantId") || "",
+            gameId: fd.get("gameId") || "",
+            externalUserId: fd.get("externalUserId") || "",
+            type: fd.get("type") || "",
+            limit: fd.get("limit") || 200
+          });
+        });
+
+        (async () => {
+          await fillGameSelect();
+          // 如果 URL 带了 gameId,自动应用
+          const initialQ = new URLSearchParams(window.location.search);
+          load({
+            limit: 200,
+            gameId: initialQ.get("gameId") || "",
+            merchantId: initialQ.get("merchantId") || ""
+          });
+          if (initialQ.get("merchantId")) form.querySelector('[name="merchantId"]').value = initialQ.get("merchantId");
+        })();
+      })();
+    </script>
+  </body>
+</html>

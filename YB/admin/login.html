@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>登录 · WTNS Gaming 管理后台</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body class="login-body">
+    <main class="login-shell">
+      <section class="login-card">
+        <p class="eyebrow">WTNS Gaming Admin</p>
+        <h1>登录</h1>
+        <p class="subtle login-intro">登录后可管理游戏库、商户、按 (商户 × 游戏) 调策略、查看流水审计。</p>
+
+        <form id="loginForm" class="login-form" autocomplete="off">
+          <label>
+            用户名
+            <input id="loginUsername" name="username" type="text" required autocomplete="username" autofocus />
+          </label>
+          <label>
+            密码
+            <input id="loginPassword" name="password" type="password" required autocomplete="current-password" />
+          </label>
+          <div class="login-actions">
+            <button class="primary-button" type="submit" id="loginSubmit">登录</button>
+            <span id="loginStatus" class="status login-status">就绪</span>
+          </div>
+        </form>
+
+        <p class="subtle login-footnote">
+          忘记密码?登录服务器设置环境变量 <code>ADMIN_PASSWORD</code> 重启服务(详见运维手册)。
+        </p>
+      </section>
+    </main>
+    <script src="./login.js"></script>
+  </body>
+</html>

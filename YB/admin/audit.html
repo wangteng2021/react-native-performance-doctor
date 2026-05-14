@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>审计 · WTNS Gaming Admin</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div id="topNav"></div>
+
+    <main class="shell">
+      <div class="page-header">
+        <div>
+          <h1>操作审计</h1>
+          <p class="subtle">谁什么时候改了什么(SQLite <code>admin_audit</code> 表)。</p>
+        </div>
+      </div>
+
+      <section class="panel">
+        <form id="filterForm" class="form-grid">
+          <label>商户 ID<input name="merchantId" placeholder="任意" /></label>
+          <label>游戏
+            <select name="gameId">
+              <option value="">任意游戏</option>
+            </select>
+          </label>
+          <label>操作员<input name="actorUser" placeholder="任意" /></label>
+          <label>动作
+            <select name="action">
+              <option value="">任意</option>
+              <option value="strategy.update">strategy.update(全局策略)</option>
+              <option value="merchant.strategy.update">merchant.strategy.update</option>
+              <option value="game.default-strategy.update">game.default-strategy.update</option>
+            </select>
+          </label>
+          <label>最近 N 条<input name="limit" type="number" min="10" max="500" value="100" /></label>
+          <button class="primary-button" type="submit">查询</button>
+        </form>
+      </section>
+
+      <section class="panel">
+        <div id="auditList" class="cards empty">点查询加载…</div>
+      </section>
+    </main>
+
+    <script src="./shared.js"></script>
+    <script>
+      (function () {
+        YBAdmin.bootstrapNav("audit");
+        const form = document.getElementById("filterForm");
+        const listEl = document.getElementById("auditList");
+
+        function diffSummary(before, after) {
+          if (!before || !after) return "—";
+          const changed = [];
+          function walk(b, a, prefix) {
+            if (typeof b !== "object" || typeof a !== "object" || b === null || a === null) {
+              if (b !== a) changed.push(`${prefix} ${JSON.stringify(b)} → ${JSON.stringify(a)}`);
+              return;
+            }
+            const keys = new Set([...Object.keys(b || {}), ...Object.keys(a || {})]);
+            keys.forEach((k) => walk(b[k], a[k], prefix ? `${prefix}.${k}` : k));
+          }
+          walk(before, after, "");
+          if (changed.length === 0) return "(未变化)";
+          if (changed.length > 5) return `${changed.slice(0, 5).join(" / ")} … 共 ${changed.length} 项`;
+          return changed.join(" / ");
+        }
+
+        function render(items) {
+          if (!items.length) {
+            listEl.classList.add("empty");
+            listEl.innerHTML = '<p class="subtle">没有匹配的记录。</p>';
+            return;
+          }
+          listEl.classList.remove("empty");
+          listEl.innerHTML = items.map((a) => `
+            <article class="code-card">
+              <div>
+                <p class="code-value">${YBAdmin.escapeHtml(a.action)}</p>
+                <p class="meta">
+                  <strong>${YBAdmin.escapeHtml(a.actorUser || "?")}</strong> ·
+                  ${a.merchantId ? `商户 <code>${YBAdmin.escapeHtml(a.merchantId)}</code>` : "<em>全局</em>"} ·
+                  ${a.gameId ? `游戏 <code>${YBAdmin.escapeHtml(a.gameId)}</code> · ` : ""}
+                  ${YBAdmin.escapeHtml(a.createdAt)} ·
+                  IP ${YBAdmin.escapeHtml(a.actorIp || "—")}
+                </p>
+                <p class="meta" style="margin-top:8px;">变化: ${YBAdmin.escapeHtml(diffSummary(a.before, a.after))}</p>
+              </div>
+            </article>
+          `).join("");
+        }
+
+        async function load(filters = {}) {
+          const qs = new URLSearchParams();
+          Object.entries(filters).forEach(([k, v]) => { if (v) qs.set(k, v); });
+          try {
+            const data = await YBAdmin.fetchJson(`/api/admin/audit?${qs.toString()}`);
+            render(data.items || []);
+          } catch (e) {
+            listEl.textContent = "加载失败:" + e.message;
+          }
+        }
+
+        form.addEventListener("submit", (e) => {
+          e.preventDefault();
+          const fd = new FormData(form);
+          load({
+            merchantId: fd.get("merchantId") || "",
+            gameId: fd.get("gameId") || "",
+            actorUser: fd.get("actorUser") || "",
+            action: fd.get("action") || "",
+            limit: fd.get("limit") || 100
+          });
+        });
+
+        async function fillGameSelect() {
+          try {
+            const games = await YBAdmin.loadAllGames();
+            const sel = form.querySelector('[name="gameId"]');
+            sel.innerHTML = '<option value="">任意游戏</option>' + games.map((g) =>
+              `<option value="${YBAdmin.escapeHtml(g.gameId)}">${YBAdmin.escapeHtml(g.name)} (${YBAdmin.escapeHtml(g.gameId)})</option>`
+            ).join("");
+          } catch (e) { /* ignore */ }
+        }
+
+        (async () => {
+          await fillGameSelect();
+          load({ limit: 100 });
+        })();
+      })();
+    </script>
+  </body>
+</html>

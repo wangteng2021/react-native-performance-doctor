@@ -1,0 +1,10 @@
+{
+  "name": "yb-pinata-admin",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Independent admin console for generating PinataWins test codes.",
+  "scripts": {
+    "dev": "python3 -m http.server 3001",
+    "check": "node --check app.js"
+  }
+}

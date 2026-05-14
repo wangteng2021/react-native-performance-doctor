@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>首页 · WTNS Gaming Admin</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div id="topNav"></div>
+
+    <main class="shell">
+      <div class="page-header">
+        <div>
+          <h1>总览</h1>
+          <p class="subtle">最近 24 小时业务概况。详情请进 <a href="./games.html">游戏</a> / <a href="./merchants.html">商户</a> / <a href="./transactions.html">流水</a>。</p>
+        </div>
+        <button id="refreshDashboard" class="ghost-button" type="button">刷新</button>
+      </div>
+
+      <section class="kpi-grid">
+        <div class="kpi-card">
+          <span class="kpi-label">游戏(active / 总)</span>
+          <span class="kpi-value" data-kpi="games">— / —</span>
+          <span class="kpi-sub" data-kpi="gamesDisabled">disabled: —</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-label">商户(active / 总)</span>
+          <span class="kpi-value" data-kpi="merchants">— / —</span>
+          <span class="kpi-sub" data-kpi="merchantsDisabled">disabled: —</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-label">总玩家</span>
+          <span class="kpi-value" data-kpi="playerCount">—</span>
+          <span class="kpi-sub">(已绑定商户)</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-label">24h 总下注</span>
+          <span class="kpi-value" data-kpi="totalBet">—</span>
+          <span class="kpi-sub" data-kpi="txnCount">— 笔</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-label">24h 总中奖</span>
+          <span class="kpi-value" data-kpi="totalWin">—</span>
+          <span class="kpi-sub" data-kpi="userCount">— 个用户</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-label">24h GGR</span>
+          <span class="kpi-value" data-kpi="ggr">—</span>
+          <span class="kpi-sub">下注 - 中奖</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-label">24h 实际 RTP</span>
+          <span class="kpi-value" data-kpi="rtp">—</span>
+          <span class="kpi-sub">建议 88-94%</span>
+        </div>
+        <div class="kpi-card" style="grid-column: span 2;">
+          <span class="kpi-label">最近一次大奖</span>
+          <span class="kpi-value" data-kpi="bigWin">—</span>
+          <span class="kpi-sub" data-kpi="bigWinMeta">—</span>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-title">
+          <h2>24h 各游戏分布</h2>
+          <a href="./games.html" class="ghost-button">游戏库</a>
+        </div>
+        <div id="gameBreakdown" class="txn-table-wrap empty">加载中...</div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-title">
+          <h2>最近操作记录</h2>
+          <a href="./audit.html" class="ghost-button">完整审计</a>
+        </div>
+        <div id="recentAudits" class="cards empty">加载中...</div>
+      </section>
+    </main>
+
+    <script src="./shared.js"></script>
+    <script>
+      (function () {
+        YBAdmin.bootstrapNav("index");
+
+        function setKpi(key, value) {
+          const el = document.querySelector(`[data-kpi="${key}"]`);
+          if (el) el.textContent = value;
+        }
+
+        async function loadDashboard() {
+          try {
+            const data = await YBAdmin.fetchJson("/api/admin/dashboard");
+            setKpi("merchants", `${data.merchants.active_count || 0} / ${data.merchants.total || 0}`);
+            setKpi("merchantsDisabled", `disabled: ${data.merchants.disabled_count || 0}`);
+            if (data.games) {
+              setKpi("games", `${data.games.active_count || 0} / ${data.games.total || 0}`);
+              setKpi("gamesDisabled", `disabled: ${data.games.disabled_count || 0}, beta: ${data.games.beta_count || 0}`);
+            }
+            setKpi("playerCount", YBAdmin.fmtNumber(data.playerCount));
+            setKpi("totalBet", YBAdmin.fmtNumber(data.last24h.totalBet));
+            setKpi("totalWin", YBAdmin.fmtNumber(data.last24h.totalWin));
+            setKpi("ggr", YBAdmin.fmtNumber(data.last24h.ggr));
+            setKpi("rtp", YBAdmin.fmtRtp(data.last24h.rtp));
+            setKpi("txnCount", `${data.last24h.txnCount} 笔`);
+            setKpi("userCount", `${data.last24h.userCount} 个用户`);
+            if (data.recentBigWin) {
+              const b = data.recentBigWin;
+              const mult = b.bet > 0 ? (b.win / b.bet).toFixed(1) : "—";
+              setKpi("bigWin", `${YBAdmin.fmtNumber(b.win)} (${mult}×)`);
+              setKpi("bigWinMeta", `${b.merchant_id || "—"} / ${b.external_user_id || "—"} · ${b.created_at}`);
+            } else {
+              setKpi("bigWin", "—");
+              setKpi("bigWinMeta", "暂无 ≥ 20× 大奖记录");
+            }
+
+            // 24h 各游戏分布
+            const gbEl = document.getElementById("gameBreakdown");
+            const rows = data.gameBreakdown || [];
+            if (!rows.length) {
+              gbEl.classList.add("empty");
+              gbEl.innerHTML = '<p class="subtle">最近 24h 没有交易,无法分组。</p>';
+            } else {
+              gbEl.classList.remove("empty");
+              const trs = rows.map((g) => `
+                <tr>
+                  <td>
+                    <strong>${YBAdmin.escapeHtml(g.gameName)}</strong>
+                    <code style="color:#94a3b8;margin-left:6px;">${YBAdmin.escapeHtml(g.gameId)}</code>
+                  </td>
+                  <td class="num">${YBAdmin.fmtNumber(g.totalBet)}</td>
+                  <td class="num">${YBAdmin.fmtNumber(g.totalWin)}</td>
+                  <td class="num">${YBAdmin.fmtNumber(g.ggr)}</td>
+                  <td class="num">${YBAdmin.fmtRtp(g.rtp)}</td>
+                  <td class="num">${YBAdmin.fmtNumber(g.txnCount)}</td>
+                  <td class="num">${YBAdmin.fmtNumber(g.userCount)}</td>
+                  <td>
+                    <a href="./transactions.html?gameId=${encodeURIComponent(g.gameId)}" style="color:#fbbf24;">流水</a>
+                  </td>
+                </tr>
+              `).join("");
+              gbEl.innerHTML = `
+                <table class="txn-table">
+                  <thead><tr>
+                    <th>游戏</th>
+                    <th class="num">下注</th><th class="num">中奖</th><th class="num">GGR</th><th class="num">RTP</th>
+                    <th class="num">交易数</th><th class="num">用户数</th><th></th>
+                  </tr></thead>
+                  <tbody>${trs}</tbody>
+                </table>
+              `;
+            }
+
+            const auditEl = document.getElementById("recentAudits");
+            const audits = data.recentAudits || [];
+            if (!audits.length) {
+              auditEl.innerHTML = '<p class="subtle">还没有操作记录。</p>';
+            } else {
+              auditEl.classList.remove("empty");
+              auditEl.innerHTML = audits.map((a) => `
+                <article class="code-card">
+                  <div>
+                    <p class="code-value">${YBAdmin.escapeHtml(a.action)}</p>
+                    <p class="meta">
+                      ${YBAdmin.escapeHtml(a.actorUser || "?")} ·
+                      ${YBAdmin.escapeHtml(a.merchantId || "global")} ·
+                      ${a.gameId ? YBAdmin.escapeHtml(a.gameId) + " · " : ""}
+                      ${YBAdmin.escapeHtml(a.createdAt)} · IP ${YBAdmin.escapeHtml(a.actorIp || "—")}
+                    </p>
+                  </div>
+                </article>
+              `).join("");
+            }
+          } catch (e) {
+            console.warn("dashboard load failed", e);
+          }
+        }
+
+        document.getElementById("refreshDashboard").addEventListener("click", loadDashboard);
+        loadDashboard();
+      })();
+    </script>
+  </body>
+</html>

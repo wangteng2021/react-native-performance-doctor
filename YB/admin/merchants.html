@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>商户 · WTNS Gaming Admin</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div id="topNav"></div>
+
+    <main class="shell">
+      <div class="page-header">
+        <div>
+          <h1>商户</h1>
+          <p class="subtle">每个接入方一个商户。点击进详情:策略、Bet Tier、测试 Code、流水。</p>
+        </div>
+        <button id="toggleNew" class="primary-button" type="button">+ 新建商户</button>
+      </div>
+
+      <section id="newMerchantPanel" class="panel" style="display:none;">
+        <div class="panel-title">
+          <h2>新建商户</h2>
+        </div>
+        <form id="newMerchantForm" class="form-grid">
+          <label>
+            商户 ID
+            <input name="merchantId" placeholder="demo-app" maxlength="64" required />
+            <span class="hint">2-64 位小写字母/数字/下划线/横杠</span>
+          </label>
+          <label>
+            显示名
+            <input name="name" placeholder="Demo App" maxlength="100" required />
+          </label>
+          <label class="wide">
+            IP 白名单(逗号分隔,空 = 不限)
+            <input name="ipWhitelist" placeholder="1.2.3.4, 5.6.7.8" />
+          </label>
+          <button class="primary-button" type="submit">创建商户</button>
+        </form>
+      </section>
+
+      <section id="merchantList" class="cards empty" style="margin-top: 18px;">加载中...</section>
+    </main>
+
+    <script src="./shared.js"></script>
+    <script>
+      (function () {
+        YBAdmin.bootstrapNav("merchants");
+
+        const listEl = document.getElementById("merchantList");
+        const formPanel = document.getElementById("newMerchantPanel");
+        const form = document.getElementById("newMerchantForm");
+        const toggleBtn = document.getElementById("toggleNew");
+
+        toggleBtn.addEventListener("click", () => {
+          formPanel.style.display = formPanel.style.display === "none" ? "block" : "none";
+        });
+
+        async function loadList() {
+          try {
+            const data = await YBAdmin.fetchJson("/api/admin/merchants");
+            renderList(data.items || []);
+          } catch (e) {
+            listEl.textContent = "加载失败:" + e.message;
+          }
+        }
+
+        async function loadEnrichedList() {
+          // 拉每个商户的 24h summary(并行)
+          await loadList();
+        }
+
+        function renderList(items) {
+          if (!items.length) {
+            listEl.classList.add("empty");
+            listEl.innerHTML = '<p class="subtle">还没有商户。点上方"新建商户"创建。</p>';
+            return;
+          }
+          listEl.classList.remove("empty");
+          listEl.innerHTML = items.map((m) => `
+            <a href="./merchant.html?id=${encodeURIComponent(m.merchant_id)}" class="merchant-card">
+              <div class="merchant-card-info">
+                <p class="merchant-card-id">${YBAdmin.escapeHtml(m.merchant_id)}</p>
+                <p class="merchant-card-name">${YBAdmin.escapeHtml(m.name)}</p>
+                <p class="merchant-card-meta">
+                  <span class="status-badge status-badge-${m.status}">${m.status}</span> ·
+                  IP: ${m.ip_whitelist ? YBAdmin.escapeHtml(m.ip_whitelist) : "不限"} ·
+                  创建于 ${YBAdmin.escapeHtml(m.created_at)}
+                </p>
+              </div>
+              <div class="merchant-card-stats">
+                <span class="stat">
+                  <span class="kpi-label">点击</span>
+                  <span class="stat-value" style="color:#86efac;">详情 →</span>
+                </span>
+              </div>
+            </a>
+          `).join("");
+        }
+
+        async function onCreate(event) {
+          event.preventDefault();
+          const fd = new FormData(form);
+          const payload = {
+            merchantId: fd.get("merchantId"),
+            name: fd.get("name"),
+            ipWhitelist: fd.get("ipWhitelist") || ""
+          };
+          try {
+            const r = await fetch(YBAdmin.apiUrl("/api/admin/merchants"), {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload)
+            });
+            const data = await r.json();
+            if (!data.ok) throw new Error(data.error || "create failed");
+            window.alert(
+              `商户创建成功!\n\n` +
+              `商户 ID:${data.merchant.merchantId}\n\n` +
+              `Secret(只显示这一次,请保存):\n${data.merchant.secret}`
+            );
+            form.reset();
+            formPanel.style.display = "none";
+            loadList();
+          } catch (e) {
+            window.alert("创建失败:" + e.message);
+          }
+        }
+
+        form.addEventListener("submit", onCreate);
+        loadList();
+      })();
+    </script>
+  </body>
+</html>

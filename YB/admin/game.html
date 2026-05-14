@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>游戏详情 · WTNS Gaming Admin</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div id="topNav"></div>
+
+    <main class="shell">
+      <div class="page-header">
+        <div>
+          <p class="eyebrow"><a href="./games.html" style="color:#94a3b8;text-decoration:none;">← 游戏列表</a></p>
+          <h1 id="gameTitle">加载中...</h1>
+          <p class="subtle" id="gameMeta">—</p>
+        </div>
+        <div style="display:flex; gap: 10px;">
+          <button id="toggleStatusBtn" class="ghost-button" type="button">禁用</button>
+        </div>
+      </div>
+
+      <div class="tabs">
+        <button class="tab is-active" data-tab="meta">基本信息</button>
+        <button class="tab" data-tab="default-strategy">默认策略(全平台兜底)</button>
+        <button class="tab" data-tab="merchants">已开通商户</button>
+      </div>
+
+      <!-- Tab 1: 基本信息 -->
+      <section class="tab-panel is-active" data-panel="meta">
+        <div class="panel">
+          <div class="panel-title">
+            <h2>编辑基本信息</h2>
+            <span id="metaStatus" class="status">就绪</span>
+          </div>
+          <form id="metaForm" class="form-grid">
+            <label>显示名<input name="name" required /></label>
+            <label>类型<input name="type" /></label>
+            <label class="wide">前端资源 URL<input name="assetUrl" required /></label>
+            <label class="wide">图标 URL(可选)<input name="iconUrl" /></label>
+            <label class="wide">描述<textarea name="description" rows="2"></textarea></label>
+            <button class="primary-button" type="submit">保存</button>
+          </form>
+        </div>
+      </section>
+
+      <!-- Tab 2: 默认策略 -->
+      <section class="tab-panel" data-panel="default-strategy">
+        <div class="panel">
+          <div class="panel-title">
+            <h2>本游戏的默认策略</h2>
+            <span id="defStrategyStatus" class="status">未加载</span>
+          </div>
+          <p class="subtle" style="margin-bottom: 16px;">
+            优先级:商户×游戏 override &gt; 这里的游戏默认 &gt; 全局兜底配置。
+            修改这里只影响"该游戏 + 没有自定义 override 的商户"。
+          </p>
+          <form id="defStrategyForm" class="form-grid">
+            <label>大奖动画阈值(倍数)<input name="bigWinMultiplier" type="number" min="1" max="1000" step="1" /></label>
+            <label>返奖率 RTP(0-1)<input name="rtpTarget" type="number" min="0.5" max="1.5" step="0.01" /></label>
+            <label>RTP 容差<input name="rtpTolerance" type="number" min="0" max="0.3" step="0.01" /></label>
+            <label>单局封顶倍数<input name="maxWinMultiplier" type="number" min="10" max="100000" step="10" /></label>
+            <button class="primary-button wide" type="submit">保存默认策略</button>
+          </form>
+          <p class="subtle" style="margin-top: 12px;">
+            分级下注(Bet Tier)、强制中奖等更细粒度的设置,在
+            <a href="./merchants.html">商户详情</a>
+            的"策略配置(本游戏)"里调。
+          </p>
+        </div>
+      </section>
+
+      <!-- Tab 3: 已开通商户 -->
+      <section class="tab-panel" data-panel="merchants">
+        <div class="panel">
+          <div class="panel-title">
+            <h2>已开通本游戏的商户</h2>
+            <button id="refreshMerchants" class="ghost-button" type="button">刷新</button>
+          </div>
+          <div id="merchantList" class="txn-table-wrap empty"><p class="subtle">加载中...</p></div>
+        </div>
+      </section>
+    </main>
+
+    <script src="./shared.js"></script>
+    <script>
+      (function () {
+        YBAdmin.bootstrapNav("games");
+
+        const gameId = YBAdmin.getQueryParam("id");
+        if (!gameId) {
+          window.location.replace("./games.html");
+          return;
+        }
+
+        const STRATEGY_FIELDS = ["bigWinMultiplier", "rtpTarget", "rtpTolerance", "maxWinMultiplier"];
+
+        // Tabs
+        document.querySelectorAll(".tab").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            document.querySelectorAll(".tab").forEach((b) => b.classList.remove("is-active"));
+            document.querySelectorAll(".tab-panel").forEach((p) => p.classList.remove("is-active"));
+            btn.classList.add("is-active");
+            document.querySelector(`[data-panel="${btn.dataset.tab}"]`).classList.add("is-active");
+          });
+        });
+
+        const metaForm = document.getElementById("metaForm");
+        const metaStatus = document.getElementById("metaStatus");
+        const defForm = document.getElementById("defStrategyForm");
+        const defStatus = document.getElementById("defStrategyStatus");
+
+        async function loadGame() {
+          try {
+            const data = await YBAdmin.fetchJson(`/api/admin/games/${encodeURIComponent(gameId)}`);
+            const g = data.game;
+            document.getElementById("gameTitle").textContent = g.name;
+            document.getElementById("gameMeta").innerHTML =
+              `<code>${YBAdmin.escapeHtml(g.gameId)}</code> · ` +
+              YBAdmin.statusBadge(g.status) + " · " +
+              `类型 ${YBAdmin.escapeHtml(g.type)} · ` +
+              `创建于 ${YBAdmin.escapeHtml(g.createdAt)}`;
+            document.getElementById("toggleStatusBtn").textContent = g.status === "active" ? "禁用" : "启用";
+
+            metaForm.querySelector('[name="name"]').value = g.name || "";
+            metaForm.querySelector('[name="type"]').value = g.type || "";
+            metaForm.querySelector('[name="assetUrl"]').value = g.assetUrl || "";
+            metaForm.querySelector('[name="iconUrl"]').value = g.iconUrl || "";
+            metaForm.querySelector('[name="description"]').value = g.description || "";
+
+            // 默认策略表单
+            const ds = g.defaultStrategy || {};
+            STRATEGY_FIELDS.forEach((f) => {
+              const inp = defForm.querySelector(`[name="${f}"]`);
+              if (inp && ds[f] !== undefined) inp.value = ds[f];
+              else if (inp) inp.value = "";
+            });
+            YBAdmin.setStatusOn(defStatus, g.defaultStrategy ? "已加载(本游戏默认)" : "尚未自定义,使用全局兜底");
+          } catch (e) {
+            document.getElementById("gameTitle").textContent = "加载失败:" + e.message;
+          }
+        }
+
+        async function saveMeta(event) {
+          event.preventDefault();
+          YBAdmin.setStatusOn(metaStatus, "保存中...");
+          const fd = new FormData(metaForm);
+          const payload = {
+            name: fd.get("name"),
+            type: fd.get("type"),
+            assetUrl: fd.get("assetUrl"),
+            iconUrl: fd.get("iconUrl") || "",
+            description: fd.get("description") || ""
+          };
+          try {
+            const r = await fetch(YBAdmin.apiUrl(`/api/admin/games/${encodeURIComponent(gameId)}`), {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload)
+            });
+            const data = await r.json();
+            if (!data.ok) throw new Error(data.error || "save failed");
+            YBAdmin.setStatusOn(metaStatus, "已保存");
+            loadGame();
+          } catch (e) {
+            YBAdmin.setStatusOn(metaStatus, e.message, false);
+          }
+        }
+        metaForm.addEventListener("submit", saveMeta);
+
+        async function saveDefStrategy(event) {
+          event.preventDefault();
+          YBAdmin.setStatusOn(defStatus, "保存中...");
+          const payload = {};
+          STRATEGY_FIELDS.forEach((f) => {
+            const v = Number(defForm.querySelector(`[name="${f}"]`).value);
+            if (Number.isFinite(v)) payload[f] = v;
+          });
+          try {
+            const r = await fetch(YBAdmin.apiUrl(`/api/admin/games/${encodeURIComponent(gameId)}/default-strategy`), {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload)
+            });
+            const data = await r.json();
+            if (!data.ok) throw new Error(data.error || "save failed");
+            YBAdmin.setStatusOn(defStatus, "已保存,后端已生效");
+            loadGame();
+          } catch (e) {
+            YBAdmin.setStatusOn(defStatus, e.message, false);
+          }
+        }
+        defForm.addEventListener("submit", saveDefStrategy);
+
+        document.getElementById("toggleStatusBtn").addEventListener("click", async () => {
+          const btn = document.getElementById("toggleStatusBtn");
+          const newStatus = btn.textContent.trim() === "禁用" ? "disabled" : "active";
+          try {
+            const r = await fetch(YBAdmin.apiUrl(`/api/admin/games/${encodeURIComponent(gameId)}`), {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ status: newStatus })
+            });
+            const data = await r.json();
+            if (!data.ok) throw new Error(data.error);
+            loadGame();
+          } catch (e) { window.alert("失败:" + e.message); }
+        });
+
+        const merchantListEl = document.getElementById("merchantList");
+
+        async function loadMerchantList() {
+          try {
+            // 没有专门 endpoint;走全部商户 + 每个查 games + 过滤
+            const all = await YBAdmin.fetchJson("/api/admin/merchants");
+            const items = all.items || [];
+            const enabledRows = [];
+            for (const m of items) {
+              try {
+                const r = await YBAdmin.fetchJson(`/api/admin/merchants/${encodeURIComponent(m.merchant_id)}/games`);
+                const hit = (r.items || []).find((x) => x.gameId === gameId && x.enabled);
+                if (hit) enabledRows.push({ merchant: m, game: hit });
+              } catch (e) { /* skip */ }
+            }
+            if (!enabledRows.length) {
+              merchantListEl.classList.add("empty");
+              merchantListEl.innerHTML = '<p class="subtle">还没有商户开通本游戏。</p>';
+              return;
+            }
+            merchantListEl.classList.remove("empty");
+            const rows = enabledRows.map((row) => `
+              <tr>
+                <td><a href="./merchant.html?id=${encodeURIComponent(row.merchant.merchant_id)}"><code>${YBAdmin.escapeHtml(row.merchant.merchant_id)}</code></a></td>
+                <td>${YBAdmin.escapeHtml(row.merchant.name)}</td>
+                <td>${YBAdmin.statusBadge(row.merchant.status)}</td>
+                <td>${YBAdmin.escapeHtml(row.game.createdAt || "—")}</td>
+              </tr>
+            `).join("");
+            merchantListEl.innerHTML = `
+              <table class="txn-table">
+                <thead><tr><th>商户 ID</th><th>名称</th><th>状态</th><th>开通于</th></tr></thead>
+                <tbody>${rows}</tbody>
+              </table>
+            `;
+          } catch (e) {
+            merchantListEl.textContent = "加载失败:" + e.message;
+          }
+        }
+        document.getElementById("refreshMerchants").addEventListener("click", loadMerchantList);
+
+        loadGame();
+        loadMerchantList();
+      })();
+    </script>
+  </body>
+</html>
