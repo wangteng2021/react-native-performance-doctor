@@ -1418,7 +1418,8 @@ const server = http.createServer(async (request, response) => {
         return;
       }
       // raw 模式:消费 token,302 到 /embed(原行为)
-      if (url.searchParams.get("raw") === "1") {
+      // FishStar 原包在 iframe 预览壳里会进入 pc iframe 分支,因此测试 Code 默认也直接打开原包。
+      if (url.searchParams.get("raw") === "1" || tc.gameId === "fishstar") {
         const launch = merchantService.createLaunchToken({
           merchantId: tc.merchantId,
           externalUserId: tc.externalUserId,
