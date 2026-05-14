@@ -1,0 +1,212 @@
+// ============================================================================
+// strategy-config.example.jsonc
+// ----------------------------------------------------------------------------
+// 这是 strategy-config.json 的「带注释参考版」。
+// 实际生效的文件是 strategy-config.json,会被管理后台 POST 写回,
+// 所以不要直接改这个文件就指望生效——这只是给开发/运营看字段含义用。
+//
+// 路径:backend/strategy-config.json
+// 加载逻辑:backend/gameStrategyConfig.js → loadConfig() → sanitizeConfig()
+// 落盘时机:管理后台 POST /api/admin/strategy 时
+// 生效时机:写入 / 重启进程后立即生效,前端的 /api/strategy 也立刻拿到新值
+//
+// 业务向解释和调参场景参考:OPERATIONS.md
+// ============================================================================
+{
+  // ──────────────────────────────────────────
+  // 全局返奖率(RTP)目标
+  // ──────────────────────────────────────────
+
+  // 目标返奖率。0.92 表示玩家长期能拿回 92%。
+  // 范围 0.5 ~ 1.5 (clamp);生产建议 0.85 ~ 0.95。
+  // 改大 → 玩家舒服,庄家亏。改小 → 玩家投诉,庄家利润高。
+  "rtpTarget": 0.92,
+
+  // 实际 RTP 偏离 rtpTarget 多少时才主动调节。
+  // 例如 0.03 表示实际 RTP 在 0.89~0.95 之间不动,出去这个范围才补偿/降温。
+  // 范围 0 ~ 0.3。改小 → 系统更紧张,体验更稳但抖动多。
+  "rtpTolerance": 0.03,
+
+  // ──────────────────────────────────────────
+  // 大奖动画阈值
+  // ──────────────────────────────────────────
+
+  // 中奖倍数 ≥ 此值时,前端播放大奖动画(BIG WIN / MEGA / SUPER MEGA / EPIC)。
+  // 范围 1 ~ 1000。默认 20,也就是 20 倍下注。
+  // 改大 → 大奖动画稀有,玩家少爽点。改小 → 大奖动画频繁,廉价。
+  "bigWinMultiplier": 20,
+
+  // 单次中奖的最大倍数封顶,防止一发暴击导致庄家巨亏。
+  // 范围 10 ~ 100000。默认 5000(常见 slot 行业上限)。
+  "maxWinMultiplier": 5000,
+
+  // ──────────────────────────────────────────
+  // 全局基线概率(被 betTiers 覆盖,仅未启用 tier 时生效)
+  // ──────────────────────────────────────────
+
+  // 不在 newUserProtection / lossRelief / winCooling 之内时,主动给中奖的概率。
+  // 范围 0 ~ 1。
+  "baseForceWinChance": 0.18,
+
+  // 不在以上特殊路径时,给 near-miss(差一点中)的概率。
+  "baseNearMissChance": 0.24,
+
+  // ──────────────────────────────────────────
+  // 新用户保护期(前 N 局走特殊策略,留住人)
+  // ──────────────────────────────────────────
+  "newUserProtection": {
+    // 是否启用新用户保护
+    "enabled": true,
+
+    // 前多少局走新用户路径。默认 10 局(短保护,降低长期 RTP 偏离)。
+    // 可在 admin 后台 → 商户详情 → 策略配置(本游戏) tab 直接改。
+    "spins": 10,
+
+    // 新用户期内,玩家累计 RTP 低于这个值就强行拉到这,保护体验。
+    // 默认 1.05(新人前期略偏赢 5%)。
+    "minRtp": 1.05,
+
+    // 新用户期内,在玩家需要补偿时,主动给中奖的概率。默认 0.58。
+    "forceWinChance": 0.58,
+
+    // 第 1 局给中奖的概率。默认 0.88(几乎必中,留住新人)。
+    "firstSpinWinChance": 0.88,
+
+    // 早期(前 25%)中奖概率
+    "earlyWinChance": 0.62,
+    // 中期(25-65%)中奖概率
+    "midWinChance": 0.42,
+    // 后期(65-100%)中奖概率,逐步回归常规
+    "lateWinChance": 0.28,
+
+    // 新用户期 near-miss 概率
+    "nearMissChance": 0.34,
+
+    // 新用户连输几局之后给小额补偿
+    "reliefAfterLosses": 2,
+
+    // 新用户连赢几局之后进 breathing-room(降温)
+    "cooldownAfterWins": 2,
+
+    // 新用户期间中奖倍数范围
+    "targetWinMultiplierMin": 0.8,
+    "targetWinMultiplierMax": 3.5,
+
+    // 新用户期间单次中奖的最大倍数(比全局 maxWinMultiplier 严)
+    "maxWinMultiplier": 6
+  },
+
+  // ──────────────────────────────────────────
+  // 玩家级补偿(老用户,亏太多就给中奖)
+  // ──────────────────────────────────────────
+  "lossRelief": {
+    "enabled": true,
+
+    // 连续亏多少局触发补偿候选
+    "consecutiveLosses": 4,
+
+    // 或者亏损超过下注 X 倍触发(如 4 表示亏掉 4 倍下注就补偿)
+    // 注意:被 betTiers 的 deficitBetMultiplier 覆盖,仅未启用 tier 时生效
+    "deficitBetMultiplier": 4,
+
+    // 触发后,实际给中奖的概率(留点随机)
+    "forceWinChance": 0.62,
+
+    // 补偿性中奖的倍数范围
+    "targetWinMultiplierMin": 1.2,
+    "targetWinMultiplierMax": 6
+  },
+
+  // ──────────────────────────────────────────
+  // 玩家级冷却(老用户,赢太多就降温防赢爆)
+  // ──────────────────────────────────────────
+  "winCooling": {
+    "enabled": true,
+
+    // 连续赢多少局触发冷却候选
+    "consecutiveWins": 3,
+
+    // 或盈余超过下注 X 倍触发
+    // 注意:被 betTiers 的 surplusBetMultiplier 覆盖,仅未启用 tier 时生效
+    "surplusBetMultiplier": 6,
+
+    // 触发后,实际降温的概率
+    "forceLoseChance": 0.72,
+
+    // 降温时给 near-miss(而不是普通输)的概率
+    "nearMissChance": 0.45
+  },
+
+  // ──────────────────────────────────────────
+  // near-miss(差一点中,刮刮乐式)
+  // ──────────────────────────────────────────
+  "nearMiss": {
+    "enabled": true,
+
+    // 全局的 near-miss 触发概率(被 betTiers.nearMissChance 覆盖)
+    "chance": 0.28
+  },
+
+  // ──────────────────────────────────────────
+  // 分级下注策略(行业标准 Bet-Tier)
+  // ──────────────────────────────────────────
+  // 不同下注量级的玩家走不同体验:
+  //   Low(小注):高频小奖,新手梦想感
+  //   Mid(中注):标准体验
+  //   High(大注/whale):低频大奖,更早冷却防赢爆
+  // 详见 OPERATIONS.md §五、§六。
+  "betTiers": {
+    // false 时所有人走老逻辑(baseForceWinChance / lossRelief 等)
+    "enabled": true,
+
+    // tier 边界,以「单局总下注 totalBet」为单位
+    "lowMaxBet": 50,    // ≤ 50 走 Low
+    "midMaxBet": 500,   // 50 < x ≤ 500 走 Mid;> 500 走 High
+                        // ⚠️ 后端会强制 midMaxBet >= lowMaxBet + 1
+
+    // ─── Low tier:小注玩家 ───
+    "low": {
+      // 主动给中奖的概率(高于 base 的 0.18,小注高频)
+      "forceWinChance": 0.32,
+
+      // near-miss 概率(低于 base 的 0.24,小注少给吊胃口)
+      "nearMissChance": 0.18,
+
+      // 中奖倍数范围(小注控制赢的额度)
+      "targetWinMultiplierMin": 1.0,
+      "targetWinMultiplierMax": 5,
+
+      // 盈余 X 倍下注后冷却(小注容差大)
+      "surplusBetMultiplier": 8,
+
+      // 亏损 X 倍下注后补偿
+      "deficitBetMultiplier": 6,
+
+      // 大奖触发权重。>1 偏向 max 上限(更多大奖),<1 偏向 min 下限(更多小奖)。
+      // 用幂分布:randResult = Math.pow(random, 1/boost)
+      "bigWinBoost": 1.2
+    },
+
+    // ─── Mid tier:中注玩家(标准体验) ───
+    "mid": {
+      "forceWinChance": 0.18,        // 等于 baseForceWinChance
+      "nearMissChance": 0.24,        // 等于 baseNearMissChance
+      "targetWinMultiplierMin": 1.0,
+      "targetWinMultiplierMax": 12,
+      "surplusBetMultiplier": 6,
+      "deficitBetMultiplier": 4,
+      "bigWinBoost": 1.0
+    },
+
+    // ─── High tier:大注/whale 玩家 ───
+    "high": {
+      "forceWinChance": 0.10,        // 大注低频
+      "nearMissChance": 0.40,        // 大注更多 near-miss(刮刮乐感)
+      "targetWinMultiplierMin": 1.5,
+      "targetWinMultiplierMax": 30,  // 大奖期望(行业典型 whale 体验)
+      "surplusBetMultiplier": 3,     // ⚠️ 大注更早冷却,防赢爆
+      "deficitBetMultiplier": 3,     // 大注更早补偿,留住 whale
+      "bigWinBoost": 1.5             // 大奖触发权重最高
+    }
+  }
+}
