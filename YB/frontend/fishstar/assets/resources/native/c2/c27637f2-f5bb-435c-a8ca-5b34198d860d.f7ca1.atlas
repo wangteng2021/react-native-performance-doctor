@@ -1,0 +1,34 @@
+
+fish_10004.png
+size: 256,64
+format: RGBA8888
+filter: Linear,Linear
+repeat: none
+die_03_1
+  rotate: false
+  xy: 2, 2
+  size: 93, 17
+  orig: 93, 17
+  offset: 0, 0
+  index: -1
+die_03_2
+  rotate: false
+  xy: 112, 34
+  size: 27, 17
+  orig: 27, 17
+  offset: 0, 0
+  index: -1
+die_03_3
+  rotate: false
+  xy: 141, 34
+  size: 27, 17
+  orig: 27, 17
+  offset: 0, 0
+  index: -1
+die_03_4
+  rotate: false
+  xy: 2, 21
+  size: 108, 30
+  orig: 108, 30
+  offset: 0, 0
+  index: -1

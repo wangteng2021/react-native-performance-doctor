@@ -1,0 +1,62 @@
+
+ky_buyu_anim_yuwang3_green.png
+size: 256,256
+format: RGBA8888
+filter: Linear,Linear
+repeat: none
+wangdou2
+  rotate: false
+  xy: 2, 20
+  size: 144, 143
+  orig: 176, 176
+  offset: 16, 16
+  index: -1
+泡泡球爆炸0001
+  rotate: false
+  xy: 2, 2
+  size: 16, 16
+  orig: 39, 39
+  offset: 13, 12
+  index: -1
+泡泡球爆炸0002
+  rotate: false
+  xy: 148, 9
+  size: 17, 21
+  orig: 39, 39
+  offset: 12, 10
+  index: -1
+泡泡球爆炸0003
+  rotate: false
+  xy: 148, 32
+  size: 19, 24
+  orig: 39, 39
+  offset: 11, 8
+  index: -1
+泡泡球爆炸0004
+  rotate: false
+  xy: 148, 83
+  size: 21, 25
+  orig: 39, 39
+  offset: 10, 8
+  index: -1
+泡泡球爆炸0005
+  rotate: false
+  xy: 148, 110
+  size: 22, 27
+  orig: 39, 39
+  offset: 9, 7
+  index: -1
+泡泡球爆炸0006
+  rotate: true
+  xy: 148, 58
+  size: 23, 21
+  orig: 39, 39
+  offset: 9, 8
+  index: -1
+泡泡球爆炸0007
+  rotate: false
+  xy: 148, 139
+  size: 23, 24
+  orig: 39, 39
+  offset: 9, 8
+  index: -1

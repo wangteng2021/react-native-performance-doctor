@@ -1,0 +1,34 @@
+
+fish_20006.png
+size: 512,256
+format: RGBA8888
+filter: Linear,Linear
+repeat: none
+erduo
+  rotate: false
+  xy: 306, 75
+  size: 106, 67
+  orig: 106, 67
+  offset: 0, 0
+  index: -1
+jinbi
+  rotate: false
+  xy: 306, 144
+  size: 144, 82
+  orig: 144, 82
+  offset: 0, 0
+  index: -1
+shenti
+  rotate: true
+  xy: 2, 78
+  size: 148, 302
+  orig: 148, 302
+  offset: 0, 0
+  index: -1
+weiba
+  rotate: false
+  xy: 2, 2
+  size: 213, 74
+  orig: 213, 74
+  offset: 0, 0
+  index: -1

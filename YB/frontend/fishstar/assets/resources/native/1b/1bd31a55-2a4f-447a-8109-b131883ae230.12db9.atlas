@@ -1,0 +1,55 @@
+
+xuanwo.png
+size: 481,1013
+format: RGBA8888
+filter: Linear,Linear
+repeat: none
+1
+  rotate: false
+  xy: 2, 2
+  size: 185, 211
+  orig: 185, 211
+  offset: 0, 0
+  index: -1
+2
+  rotate: false
+  xy: 189, 11
+  size: 146, 162
+  orig: 146, 162
+  offset: 0, 0
+  index: -1
+3
+  rotate: false
+  xy: 201, 175
+  size: 173, 166
+  orig: 173, 166
+  offset: 0, 0
+  index: -1
+4
+  rotate: false
+  xy: 2, 215
+  size: 197, 315
+  orig: 197, 315
+  offset: 0, 0
+  index: -1
+5
+  rotate: false
+  xy: 201, 343
+  size: 169, 187
+  orig: 169, 187
+  offset: 0, 0
+  index: -1
+quanquanjx0241
+  rotate: true
+  xy: 337, 29
+  size: 144, 142
+  orig: 150, 150
+  offset: 1, 4
+  index: -1
+uieffect_66
+  rotate: false
+  xy: 2, 532
+  size: 467, 479
+  orig: 506, 506
+  offset: 24, 2
+  index: -1

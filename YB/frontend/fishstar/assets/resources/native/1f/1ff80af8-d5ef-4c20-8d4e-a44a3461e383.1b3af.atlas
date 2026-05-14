@@ -1,0 +1,62 @@
+
+baozha_baoxiang.png
+size: 468,255
+format: RGBA8888
+filter: Linear,Linear
+repeat: none
+baoxiang4
+  rotate: true
+  xy: 192, 102
+  size: 151, 143
+  orig: 151, 143
+  offset: 0, 0
+  index: -1
+baoxiang4_g
+  rotate: true
+  xy: 2, 57
+  size: 196, 188
+  orig: 196, 188
+  offset: 0, 0
+  index: -1
+bq2
+  rotate: true
+  xy: 292, 8
+  size: 92, 90
+  orig: 100, 100
+  offset: 3, 6
+  index: -1
+dd_4
+  rotate: false
+  xy: 2, 4
+  size: 21, 21
+  orig: 25, 25
+  offset: 2, 2
+  index: -1
+ddx
+  rotate: false
+  xy: 384, 46
+  size: 75, 75
+  orig: 80, 78
+  offset: 3, 3
+  index: -1
+gss
+  rotate: false
+  xy: 337, 123
+  size: 129, 130
+  orig: 155, 137
+  offset: 14, 5
+  index: -1
+quan
+  rotate: false
+  xy: 192, 2
+  size: 98, 98
+  orig: 100, 100
+  offset: 1, 1
+  index: -1
+xx
+  rotate: false
+  xy: 2, 27
+  size: 28, 28
+  orig: 30, 30
+  offset: 1, 1
+  index: -1

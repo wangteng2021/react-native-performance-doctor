@@ -1,0 +1,55 @@
+
+fish_20007.png
+size: 512,256
+format: RGBA8888
+filter: Linear,Linear
+repeat: none
+idle_17_1
+  rotate: true
+  xy: 2, 2
+  size: 25, 19
+  orig: 25, 19
+  offset: 0, 0
+  index: -1
+idle_17_2
+  rotate: false
+  xy: 2, 29
+  size: 63, 33
+  orig: 63, 33
+  offset: 0, 0
+  index: -1
+idle_17_3
+  rotate: false
+  xy: 2, 64
+  size: 396, 190
+  orig: 396, 190
+  offset: 0, 0
+  index: -1
+idle_17_4
+  rotate: false
+  xy: 400, 105
+  size: 36, 23
+  orig: 36, 23
+  offset: 0, 0
+  index: -1
+idle_17_5
+  rotate: false
+  xy: 466, 230
+  size: 36, 24
+  orig: 36, 24
+  offset: 0, 0
+  index: -1
+idle_17_6
+  rotate: false
+  xy: 400, 193
+  size: 64, 61
+  orig: 64, 61
+  offset: 0, 0
+  index: -1
+idle_17_7
+  rotate: false
+  xy: 400, 130
+  size: 64, 61
+  orig: 64, 61
+  offset: 0, 0
+  index: -1

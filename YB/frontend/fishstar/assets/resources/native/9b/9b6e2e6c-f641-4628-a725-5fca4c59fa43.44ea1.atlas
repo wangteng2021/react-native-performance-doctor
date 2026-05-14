@@ -1,0 +1,104 @@
+
+dayudianji.png
+size: 363,155
+format: RGBA8888
+filter: Linear,Linear
+repeat: none
+ef/TX_lq
+  rotate: true
+  xy: 2, 57
+  size: 96, 95
+  orig: 100, 99
+  offset: 1, 2
+  index: -1
+ef/dd_2
+  rotate: false
+  xy: 311, 7
+  size: 42, 42
+  orig: 50, 50
+  offset: 4, 4
+  index: -1
+ef/qshsd (1)
+  rotate: true
+  xy: 63, 4
+  size: 51, 65
+  orig: 77, 77
+  offset: 11, 7
+  index: -1
+ef/qshsd (2)
+  rotate: true
+  xy: 2, 2
+  size: 53, 59
+  orig: 77, 77
+  offset: 11, 10
+  index: -1
+ef/qshsd (3)
+  rotate: false
+  xy: 205, 4
+  size: 56, 73
+  orig: 77, 77
+  offset: 10, 3
+  index: -1
+ef/qshsd (4)
+  rotate: false
+  xy: 178, 79
+  size: 47, 74
+  orig: 77, 77
+  offset: 19, 2
+  index: -1
+ef/tx_baoz4 (4)
+  rotate: true
+  xy: 99, 73
+  size: 80, 77
+  orig: 100, 100
+  offset: 8, 15
+  index: -1
+ef/tx_bdb02
+  rotate: true
+  xy: 173, 5
+  size: 66, 30
+  orig: 115, 67
+  offset: 10, 16
+  index: -1
+ef/tx_bdb03
+  rotate: true
+  xy: 227, 83
+  size: 70, 37
+  orig: 115, 67
+  offset: 21, 12
+  index: -1
+ef/tx_bdb04
+  rotate: true
+  xy: 130, 3
+  size: 68, 41
+  orig: 115, 67
+  offset: 31, 11
+  index: -1
+ef/tx_bdb05
+  rotate: true
+  xy: 263, 17
+  size: 64, 46
+  orig: 115, 67
+  offset: 41, 9
+  index: -1
+ef/tx_bdb06
+  rotate: true
+  xy: 266, 89
+  size: 64, 46
+  orig: 115, 67
+  offset: 43, 9
+  index: -1
+ef/tx_bdb07
+  rotate: true
+  xy: 314, 51
+  size: 58, 45
+  orig: 115, 67
+  offset: 51, 9
+  index: -1
+ef/tx_bdb08
+  rotate: false
+  xy: 314, 111
+  size: 47, 42
+  orig: 115, 67
+  offset: 63, 11
+  index: -1

@@ -1,0 +1,174 @@
+
+baobi_418.png
+size: 1024,512
+format: RGBA8888
+filter: Linear,Linear
+repeat: none
+coin/coin_0
+  rotate: false
+  xy: 703, 460
+  size: 43, 43
+  orig: 43, 43
+  offset: 0, 0
+  index: -1
+coin/coin_1
+  rotate: false
+  xy: 288, 219
+  size: 43, 43
+  orig: 43, 43
+  offset: 0, 0
+  index: -1
+coin/coin_10
+  rotate: false
+  xy: 47, 2
+  size: 43, 43
+  orig: 43, 43
+  offset: 0, 0
+  index: -1
+coin/coin_11
+  rotate: false
+  xy: 108, 63
+  size: 43, 43
+  orig: 43, 43
+  offset: 0, 0
+  index: -1
+coin/coin_12
+  rotate: false
+  xy: 153, 108
+  size: 43, 43
+  orig: 43, 43
+  offset: 0, 0
+  index: -1
+coin/coin_13
+  rotate: false
+  xy: 793, 460
+  size: 43, 43
+  orig: 43, 43
+  offset: 0, 0
+  index: -1
+coin/coin_14
+  rotate: false
+  xy: 333, 174
+  size: 43, 43
+  orig: 43, 43
+  offset: 0, 0
+  index: -1
+coin/coin_15
+  rotate: false
+  xy: 378, 219
+  size: 43, 43
+  orig: 43, 43
+  offset: 0, 0
+  index: -1
+coin/coin_16
+  rotate: false
+  xy: 471, 296
+  size: 43, 43
+  orig: 43, 43
+  offset: 0, 0
+  index: -1
+coin/coin_17
+  rotate: false
+  xy: 516, 341
+  size: 43, 43
+  orig: 43, 43
+  offset: 0, 0
+  index: -1
+coin/coin_18
+  rotate: false
+  xy: 561, 386
+  size: 43, 43
+  orig: 43, 43
+  offset: 0, 0
+  index: -1
+coin/coin_19
+  rotate: false
+  xy: 153, 63
+  size: 43, 43
+  orig: 43, 43
+  offset: 0, 0
+  index: -1
+coin/coin_2
+  rotate: false
+  xy: 471, 386
+  size: 43, 43
+  orig: 43, 43
+  offset: 0, 0
+  index: -1
+coin/coin_3
+  rotate: false
+  xy: 2, 2
+  size: 43, 43
+  orig: 43, 43
+  offset: 0, 0
+  index: -1
+coin/coin_4
+  rotate: false
+  xy: 108, 108
+  size: 43, 43
+  orig: 43, 43
+  offset: 0, 0
+  index: -1
+coin/coin_5
+  rotate: false
+  xy: 748, 460
+  size: 43, 43
+  orig: 43, 43
+  offset: 0, 0
+  index: -1
+coin/coin_6
+  rotate: false
+  xy: 288, 174
+  size: 43, 43
+  orig: 43, 43
+  offset: 0, 0
+  index: -1
+coin/coin_7
+  rotate: false
+  xy: 333, 219
+  size: 43, 43
+  orig: 43, 43
+  offset: 0, 0
+  index: -1
+coin/coin_8
+  rotate: false
+  xy: 471, 341
+  size: 43, 43
+  orig: 43, 43
+  offset: 0, 0
+  index: -1
+coin/coin_9
+  rotate: false
+  xy: 516, 386
+  size: 43, 43
+  orig: 43, 43
+  offset: 0, 0
+  index: -1
+ef03_1_00
+  rotate: false
+  xy: 2, 153
+  size: 284, 276
+  orig: 284, 276
+  offset: 0, 0
+  index: -1
+ef_hit_base_001
+  rotate: false
+  xy: 288, 264
+  size: 181, 165
+  orig: 181, 165
+  offset: 0, 0
+  index: -1
+fish_yellow_firework_circle
+  rotate: false
+  xy: 2, 47
+  size: 104, 104
+  orig: 104, 104
+  offset: 0, 0
+  index: -1
+guangxian
+  rotate: true
+  xy: 2, 431
+  size: 72, 699
+  orig: 72, 699
+  offset: 0, 0
+  index: -1

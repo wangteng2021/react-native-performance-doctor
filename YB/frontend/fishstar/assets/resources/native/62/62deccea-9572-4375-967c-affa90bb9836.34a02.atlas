@@ -1,0 +1,62 @@
+
+baozha_qiandai.png
+size: 344,259
+format: RGBA8888
+filter: Linear,Linear
+repeat: none
+bq2
+  rotate: true
+  xy: 236, 33
+  size: 92, 90
+  orig: 100, 100
+  offset: 3, 6
+  index: -1
+dd_4
+  rotate: false
+  xy: 267, 129
+  size: 21, 21
+  orig: 25, 25
+  offset: 2, 2
+  index: -1
+ddx
+  rotate: false
+  xy: 267, 182
+  size: 75, 75
+  orig: 80, 78
+  offset: 3, 3
+  index: -1
+gss
+  rotate: false
+  xy: 136, 127
+  size: 129, 130
+  orig: 155, 137
+  offset: 14, 5
+  index: -1
+qiandai2
+  rotate: true
+  xy: 2, 2
+  size: 94, 117
+  orig: 94, 117
+  offset: 0, 0
+  index: -1
+qiandai2 _g
+  rotate: false
+  xy: 2, 98
+  size: 132, 159
+  orig: 135, 161
+  offset: 2, 1
+  index: -1
+quan
+  rotate: false
+  xy: 136, 27
+  size: 98, 98
+  orig: 100, 100
+  offset: 1, 1
+  index: -1
+xx
+  rotate: false
+  xy: 267, 152
+  size: 28, 28
+  orig: 30, 30
+  offset: 1, 1
+  index: -1

@@ -1,0 +1,90 @@
+
+fish_30002.png
+size: 512,512
+format: RGBA8888
+filter: Linear,Linear
+repeat: none
+liyuwang_1
+  rotate: false
+  xy: 2, 2
+  size: 109, 26
+  orig: 109, 26
+  offset: 0, 0
+  index: -1
+liyuwang_10
+  rotate: false
+  xy: 2, 30
+  size: 115, 103
+  orig: 115, 103
+  offset: 0, 0
+  index: -1
+liyuwang_11
+  rotate: true
+  xy: 119, 19
+  size: 114, 102
+  orig: 114, 102
+  offset: 0, 0
+  index: -1
+liyuwang_12
+  rotate: true
+  xy: 215, 153
+  size: 106, 103
+  orig: 106, 103
+  offset: 0, 0
+  index: -1
+liyuwang_13
+  rotate: false
+  xy: 2, 135
+  size: 211, 211
+  orig: 211, 211
+  offset: 0, 0
+  index: -1
+liyuwang_2
+  rotate: false
+  xy: 2, 348
+  size: 292, 136
+  orig: 292, 136
+  offset: 0, 0
+  index: -1
+liyuwang_3
+  rotate: false
+  xy: 223, 47
+  size: 44, 49
+  orig: 44, 49
+  offset: 0, 0
+  index: -1
+liyuwang_5
+  rotate: false
+  xy: 409, 198
+  size: 70, 75
+  orig: 70, 75
+  offset: 0, 0
+  index: -1
+liyuwang_7
+  rotate: false
+  xy: 320, 186
+  size: 87, 87
+  orig: 87, 87
+  offset: 0, 0
+  index: -1
+liyuwang_8
+  rotate: false
+  xy: 215, 261
+  size: 67, 85
+  orig: 67, 85
+  offset: 0, 0
+  index: -1
+liyuwang_9
+  rotate: false
+  xy: 296, 275
+  size: 212, 209
+  orig: 212, 209
+  offset: 0, 0
+  index: -1
+paopao3
+  rotate: false
+  xy: 223, 98
+  size: 53, 53
+  orig: 53, 53
+  offset: 0, 0
+  index: -1

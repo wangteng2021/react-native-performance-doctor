@@ -1,0 +1,104 @@
+
+by_cjp.png
+size: 330,914
+format: RGBA8888
+filter: Linear,Linear
+repeat: none
+images/0
+  rotate: true
+  xy: 196, 171
+  size: 125, 126
+  orig: 125, 126
+  offset: 0, 0
+  index: -1
+images/0000
+  rotate: false
+  xy: 2, 255
+  size: 192, 192
+  orig: 192, 192
+  offset: 0, 0
+  index: -1
+images/1
+  rotate: true
+  xy: 2, 449
+  size: 231, 232
+  orig: 231, 232
+  offset: 0, 0
+  index: -1
+images/2
+  rotate: false
+  xy: 2, 61
+  size: 192, 192
+  orig: 192, 192
+  offset: 0, 0
+  index: -1
+images/333
+  rotate: false
+  xy: 2, 682
+  size: 262, 230
+  orig: 262, 230
+  offset: 0, 0
+  index: -1
+images/choudai
+  rotate: true
+  xy: 266, 664
+  size: 248, 62
+  orig: 248, 62
+  offset: 0, 0
+  index: -1
+images/daadd
+  rotate: false
+  xy: 196, 298
+  size: 129, 129
+  orig: 129, 129
+  offset: 0, 0
+  index: -1
+images/ring
+  rotate: false
+  xy: 196, 59
+  size: 110, 110
+  orig: 110, 110
+  offset: 0, 0
+  index: -1
+images/star1
+  rotate: false
+  xy: 2, 2
+  size: 58, 57
+  orig: 58, 57
+  offset: 0, 0
+  index: -1
+images/star2
+  rotate: true
+  xy: 236, 429
+  size: 56, 60
+  orig: 56, 60
+  offset: 0, 0
+  index: -1
+images/star3
+  rotate: false
+  xy: 236, 546
+  size: 59, 57
+  orig: 59, 57
+  offset: 0, 0
+  index: -1
+images/star4
+  rotate: false
+  xy: 62, 3
+  size: 58, 56
+  orig: 58, 56
+  offset: 0, 0
+  index: -1
+images/star5
+  rotate: true
+  xy: 236, 605
+  size: 57, 60
+  orig: 57, 60
+  offset: 0, 0
+  index: -1
+images/star6
+  rotate: false
+  xy: 236, 487
+  size: 59, 57
+  orig: 59, 57
+  offset: 0, 0
+  index: -1

@@ -1,0 +1,62 @@
+
+baozha_maozi.png
+size: 663,133
+format: RGBA8888
+filter: Linear,Linear
+repeat: none
+bq2
+  rotate: false
+  xy: 492, 41
+  size: 92, 90
+  orig: 100, 100
+  offset: 3, 6
+  index: -1
+dd_4
+  rotate: false
+  xy: 422, 10
+  size: 21, 21
+  orig: 25, 25
+  offset: 2, 2
+  index: -1
+ddx
+  rotate: false
+  xy: 586, 56
+  size: 75, 75
+  orig: 80, 78
+  offset: 3, 3
+  index: -1
+gss
+  rotate: true
+  xy: 174, 2
+  size: 129, 130
+  orig: 155, 137
+  offset: 14, 5
+  index: -1
+maozi1
+  rotate: false
+  xy: 306, 5
+  size: 84, 126
+  orig: 84, 126
+  offset: 0, 0
+  index: -1
+maozi1_g
+  rotate: true
+  xy: 2, 3
+  size: 128, 170
+  orig: 128, 170
+  offset: 0, 0
+  index: -1
+quan
+  rotate: false
+  xy: 392, 33
+  size: 98, 98
+  orig: 100, 100
+  offset: 1, 1
+  index: -1
+xx
+  rotate: false
+  xy: 392, 3
+  size: 28, 28
+  orig: 30, 30
+  offset: 1, 1
+  index: -1

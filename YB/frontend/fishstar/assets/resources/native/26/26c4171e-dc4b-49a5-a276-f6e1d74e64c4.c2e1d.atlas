@@ -1,0 +1,188 @@
+
+ky_buyu_anim_yuwang5.png
+size: 512,512
+format: RGBA8888
+filter: Linear,Linear
+repeat: none
+wangdou4
+  rotate: false
+  xy: 1, 207
+  size: 178, 179
+  orig: 220, 220
+  offset: 21, 21
+  index: -1
+泡泡球爆炸0003
+  rotate: false
+  xy: 222, 341
+  size: 22, 29
+  orig: 49, 49
+  offset: 15, 11
+  index: -1
+泡泡球爆炸0001
+  rotate: false
+  xy: 225, 487
+  size: 20, 20
+  orig: 49, 49
+  offset: 16, 15
+  index: -1
+泡泡球爆炸0002
+  rotate: false
+  xy: 207, 1
+  size: 20, 25
+  orig: 49, 49
+  offset: 16, 13
+  index: -1
+泡泡球爆炸0007
+  rotate: false
+  xy: 482, 475
+  size: 28, 30
+  orig: 49, 49
+  offset: 12, 10
+  index: -1
+泡泡球爆炸0006
+  rotate: false
+  xy: 322, 484
+  size: 28, 25
+  orig: 49, 49
+  offset: 12, 11
+  index: -1
+泡泡球爆炸0005
+  rotate: false
+  xy: 453, 475
+  size: 27, 33
+  orig: 49, 49
+  offset: 12, 9
+  index: -1
+泡泡球爆炸0004
+  rotate: false
+  xy: 301, 331
+  size: 25, 31
+  orig: 49, 49
+  offset: 13, 10
+  index: -1
+星星0015
+  rotate: false
+  xy: 379, 484
+  size: 22, 23
+  orig: 150, 150
+  offset: 61, 67
+  index: -1
+星星0004
+  rotate: false
+  xy: 181, 341
+  size: 39, 39
+  orig: 150, 150
+  offset: 52, 58
+  index: -1
+星星0014
+  rotate: false
+  xy: 420, 475
+  size: 31, 31
+  orig: 150, 150
+  offset: 56, 62
+  index: -1
+星星0003
+  rotate: false
+  xy: 352, 484
+  size: 25, 25
+  orig: 150, 150
+  offset: 59, 65
+  index: -1
+星星0013
+  rotate: false
+  xy: 246, 331
+  size: 53, 54
+  orig: 150, 150
+  offset: 45, 51
+  index: -1
+星星0002
+  rotate: false
+  xy: 222, 372
+  size: 14, 14
+  orig: 150, 150
+  offset: 65, 71
+  index: -1
+星星0012
+  rotate: false
+  xy: 181, 274
+  size: 63, 65
+  orig: 150, 150
+  offset: 40, 45
+  index: -1
+星星0011
+  rotate: false
+  xy: 420, 388
+  size: 82, 85
+  orig: 150, 150
+  offset: 31, 35
+  index: -1
+星星0010
+  rotate: false
+  xy: 225, 388
+  size: 95, 97
+  orig: 150, 150
+  offset: 24, 29
+  index: -1
+星星0009
+  rotate: false
+  xy: 1, 388
+  size: 110, 107
+  orig: 150, 150
+  offset: 18, 24
+  index: -1
+星星0008
+  rotate: false
+  xy: 113, 388
+  size: 110, 107
+  orig: 150, 150
+  offset: 18, 24
+  index: -1
+星星0001
+  rotate: false
+  xy: 238, 372
+  size: 6, 6
+  orig: 150, 150
+  offset: 68, 75
+  index: -1
+星星0007
+  rotate: false
+  xy: 322, 388
+  size: 96, 94
+  orig: 150, 150
+  offset: 24, 30
+  index: -1
+星星0017
+  rotate: false
+  xy: 238, 380
+  size: 4, 4
+  orig: 150, 150
+  offset: 69, 76
+  index: -1
+星星0006
+  rotate: false
+  xy: 181, 207
+  size: 66, 65
+  orig: 150, 150
+  offset: 39, 45
+  index: -1
+星星0016
+  rotate: false
+  xy: 403, 484
+  size: 9, 9
+  orig: 150, 150
+  offset: 67, 74
+  index: -1
+星星0005
+  rotate: false
+  xy: 246, 274
+  size: 56, 55
+  orig: 150, 150
+  offset: 44, 50
+  index: -1
+震荡圈
+  rotate: false
+  xy: 1, 1
+  size: 204, 204
+  orig: 220, 220
+  offset: 9, 7
+  index: -1

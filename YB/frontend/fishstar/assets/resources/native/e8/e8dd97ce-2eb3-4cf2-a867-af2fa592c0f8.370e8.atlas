@@ -1,0 +1,76 @@
+
+paotai09.png
+size: 512,256
+format: RGBA8888
+filter: Linear,Linear
+repeat: none
+baozhi
+  rotate: false
+  xy: 464, 180
+  size: 36, 72
+  orig: 36, 72
+  offset: 0, 0
+  index: -1
+cibang01
+  rotate: false
+  xy: 2, 128
+  size: 183, 124
+  orig: 183, 124
+  offset: 0, 0
+  index: -1
+cibang02
+  rotate: false
+  xy: 2, 2
+  size: 183, 124
+  orig: 183, 124
+  offset: 0, 0
+  index: -1
+mao01
+  rotate: false
+  xy: 419, 80
+  size: 40, 42
+  orig: 40, 42
+  offset: 0, 0
+  index: -1
+mao02
+  rotate: false
+  xy: 464, 136
+  size: 40, 42
+  orig: 40, 42
+  offset: 0, 0
+  index: -1
+shby_baozha03b
+  rotate: false
+  xy: 334, 124
+  size: 128, 128
+  orig: 128, 128
+  offset: 0, 0
+  index: -1
+shenti
+  rotate: false
+  xy: 187, 107
+  size: 145, 145
+  orig: 145, 145
+  offset: 0, 0
+  index: -1
+tou
+  rotate: false
+  xy: 187, 15
+  size: 75, 90
+  orig: 75, 90
+  offset: 0, 0
+  index: -1
+weiba01
+  rotate: true
+  xy: 264, 26
+  size: 79, 72
+  orig: 79, 72
+  offset: 0, 0
+  index: -1
+weibao02
+  rotate: false
+  xy: 338, 50
+  size: 79, 72
+  orig: 79, 72
+  offset: 0, 0
+  index: -1

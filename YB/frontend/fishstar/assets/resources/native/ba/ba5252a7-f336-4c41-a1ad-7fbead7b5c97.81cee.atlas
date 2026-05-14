@@ -1,0 +1,167 @@
+
+Coin_Gold.png
+size: 523, 523
+format: RGBA8888
+filter: Linear, Linear
+repeat: none
+e001
+  rotate: false
+  xy: 2, 404
+  size: 120, 117
+  orig: 122, 120
+  offset: 1, 2
+  index: -1
+e002
+  rotate: false
+  xy: 2, 285
+  size: 117, 117
+  orig: 119, 120
+  offset: 1, 2
+  index: -1
+e003
+  rotate: true
+  xy: 359, 182
+  size: 109, 118
+  orig: 111, 121
+  offset: 1, 2
+  index: -1
+e004
+  rotate: false
+  xy: 241, 169
+  size: 92, 118
+  orig: 94, 120
+  offset: 1, 1
+  index: -1
+e005
+  rotate: false
+  xy: 225, 48
+  size: 70, 119
+  orig: 72, 121
+  offset: 1, 1
+  index: -1
+e006
+  rotate: false
+  xy: 480, 282
+  size: 41, 119
+  orig: 43, 121
+  offset: 1, 1
+  index: -1
+e007
+  rotate: false
+  xy: 484, 403
+  size: 26, 118
+  orig: 28, 120
+  offset: 1, 1
+  index: -1
+e008
+  rotate: false
+  xy: 455, 40
+  size: 56, 119
+  orig: 58, 121
+  offset: 1, 1
+  index: -1
+e009
+  rotate: true
+  xy: 335, 98
+  size: 82, 118
+  orig: 84, 121
+  offset: 1, 1
+  index: -1
+e010
+  rotate: true
+  xy: 121, 186
+  size: 101, 118
+  orig: 103, 121
+  offset: 1, 2
+  index: -1
+e011
+  rotate: true
+  xy: 121, 289
+  size: 113, 117
+  orig: 116, 120
+  offset: 2, 2
+  index: -1
+e012
+  rotate: false
+  xy: 124, 404
+  size: 118, 117
+  orig: 121, 120
+  offset: 2, 2
+  index: -1
+e013
+  rotate: false
+  xy: 244, 404
+  size: 118, 117
+  orig: 121, 120
+  offset: 1, 2
+  index: -1
+e014
+  rotate: true
+  xy: 240, 289
+  size: 113, 117
+  orig: 116, 120
+  offset: 1, 2
+  index: -1
+e015
+  rotate: false
+  xy: 2, 165
+  size: 101, 118
+  orig: 103, 121
+  offset: 1, 2
+  index: -1
+e016
+  rotate: false
+  xy: 2, 44
+  size: 82, 119
+  orig: 84, 121
+  offset: 1, 1
+  index: -1
+e017
+  rotate: true
+  xy: 86, 34
+  size: 56, 119
+  orig: 58, 121
+  offset: 1, 1
+  index: -1
+e018
+  rotate: false
+  xy: 297, 49
+  size: 26, 118
+  orig: 28, 120
+  offset: 1, 1
+  index: -1
+e019
+  rotate: false
+  xy: 479, 161
+  size: 41, 119
+  orig: 43, 121
+  offset: 1, 1
+  index: -1
+e020
+  rotate: true
+  xy: 325, 26
+  size: 70, 119
+  orig: 72, 121
+  offset: 1, 1
+  index: -1
+e021
+  rotate: true
+  xy: 105, 92
+  size: 92, 118
+  orig: 94, 120
+  offset: 1, 1
+  index: -1
+e022
+  rotate: true
+  xy: 359, 293
+  size: 109, 119
+  orig: 111, 121
+  offset: 1, 1
+  index: -1
+e023
+  rotate: true
+  xy: 364, 404
+  size: 117, 118
+  orig: 119, 120
+  offset: 1, 1
+  index: -1

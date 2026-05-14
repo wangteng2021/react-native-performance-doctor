@@ -1,33 +1,236 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,user-scalable=no,initial-scale=1,minimum-scale=1,maximum-scale=1,viewport-fit=cover" />
-    <meta name="theme-color" content="#000000" />
-    <title>Fishing Star</title>
-    <meta name="description" content="FishStar original package entry." />
-    <meta http-equiv="refresh" content="0;url=https://game-center-test.jieyou.shop/game-packages/common-web/fishing/3.5.3/web-mobile/index.html?gsp=101&sceneMode=2&adaption=1&currencyIcon=https%3A%2F%2Fzykj-common-resources.s3.ap-southeast-1.amazonaws.com%2Fgame%2FdiamondIcon.png&aspectRatio=1&gameMode=2&gameId=FishStar&appId=7990057035&appChannel=chatna&roomId=85422171&userId=40002157&lang=2&code=3489b80a-925c-413b-8813-8c8d7b0fa14e&gameId=FishStar" />
-    <style>
-      html, body {
-        margin: 0;
-        width: 100%;
-        height: 100%;
-        overflow: hidden;
-        background: #000;
-      }
-      body {
-        display: grid;
-        place-items: center;
-        color: #fff;
-        font: 14px/1.5 Arial, sans-serif;
-      }
-      a { color: #67e8f9; }
-    </style>
-  </head>
-  <body>
-    <p>Opening FishStar... <a id="fallback" href="https://game-center-test.jieyou.shop/game-packages/common-web/fishing/3.5.3/web-mobile/index.html?gsp=101&sceneMode=2&adaption=1&currencyIcon=https%3A%2F%2Fzykj-common-resources.s3.ap-southeast-1.amazonaws.com%2Fgame%2FdiamondIcon.png&aspectRatio=1&gameMode=2&gameId=FishStar&appId=7990057035&appChannel=chatna&roomId=85422171&userId=40002157&lang=2&code=3489b80a-925c-413b-8813-8c8d7b0fa14e&gameId=FishStar">open manually</a></p>
+<!DOCTYPE html>
+<html>
+
+<head>
     <script>
-      window.location.replace(document.getElementById("fallback").href);
+      (function () {
+        var query = "gsp=101&sceneMode=2&adaption=1&currencyIcon=diamondIcon.png&aspectRatio=1&gameMode=2&gameId=FishStar&appId=7990057035&appChannel=chatna&roomId=85422171&userId=40002157&lang=2&code=3489b80a-925c-413b-8813-8c8d7b0fa14e&gameId=FishStar";
+        if (window.location.search.slice(1) !== query) {
+          window.history.replaceState(null, '', window.location.pathname + '?' + query + window.location.hash);
+        }
+      })();
     </script>
-  </body>
+    <meta charset="utf-8">
+
+    <title>Fishing Star</title>
+
+    <!--http://www.html5rocks.com/en/mobile/mobifying/-->
+    <meta name="viewport"
+          content="width=device-width,user-scalable=no,initial-scale=1, minimum-scale=1,maximum-scale=1"/>
+
+    <!--https://developer.apple.com/library/safari/documentation/AppleApplications/Reference/SafariHTMLRef/Articles/MetaTags.html-->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="format-detection" content="telephone=no">
+
+    <!-- force webkit on 360 -->
+    <meta name="renderer" content="webkit"/>
+    <meta name="force-rendering" content="webkit"/>
+    <!-- force edge on IE -->
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1"/>
+    <meta name="msapplication-tap-highlight" content="no">
+
+    <!-- force full screen on some browser -->
+    <meta name="full-screen" content="yes"/>
+    <meta name="x5-fullscreen" content="true"/>
+    <meta name="360-fullscreen" content="true"/>
+
+    <!-- force screen orientation on some browser -->
+    <meta name="screen-orientation" content="portrait"/>
+    <meta name="x5-orientation" content="portrait">
+
+    <!--fix fireball/issues/3568 -->
+    <!--<meta name="browsermode" content="application">-->
+    <meta name="x5-page-mode" content="app">
+
+    <link rel="stylesheet" type="text/css" href="style-mobile.f5ab2.css"/>
+    <link rel="shortcut icon" href="#">
+</head>
+
+<body>
+<canvas id="GameCanvas" oncontextmenu="event.preventDefault()" tabindex="0"></canvas>
+<div id="splash" style="display: none;">
+    <div class="progress-bar stripes">
+        <span style="width: 0%"></span>
+    </div>
+    <img id="loading" src="loading.08f4a.gif">
+    <p id="loadingTxt" style="display: none;">Loading, please wait patiently</p>
+</div>
+
+<script src="src/settings.c5202.js" charset="utf-8"></script>
+
+<script src="main.27462.js" charset="utf-8"></script>
+
+<script src="lib/js/BSUtils.js?v=5.6.6"></script>
+
+<script type="text/javascript">
+    (function () {
+        // open web debugger console
+        if (typeof VConsole !== 'undefined') {
+            window.vConsole = new VConsole();
+        }
+        var BSUtils = window.BSUtils;
+        var debug = window._CCSettings.debug;
+        window.TRANSPARENT_CANVAS_BS = true;
+        window['isUnity'] = false;
+        function loadScript(moduleName, cb) {
+            function scriptLoaded() {
+                document.body.removeChild(domScript);
+                domScript.removeEventListener('load', scriptLoaded, false);
+                cb && cb();
+            };
+            var domScript = document.createElement('script');
+            domScript.async = true;
+            domScript.src = moduleName;
+            domScript.addEventListener('load', scriptLoaded, false);
+            document.body.appendChild(domScript);
+        }
+
+        loadScript(debug ? "cocos2d-js.js" : "cocos2d-js-min.fecee.js", function () { 
+            if (CC_PHYSICS_BUILTIN || CC_PHYSICS_CANNON) {
+                loadScript(debug ? 'physics.js' : 'physics-min.js', window.boot);
+            } else {
+                window.boot();
+            }
+        });
+
+        var params = BSUtils.GetUrlParams(window.location.href);
+        var splash = document.getElementById('splash');
+        var loading = document.getElementById('loading');
+        var loadingTxt = document.getElementById('loadingTxt');
+        if (JSON.stringify(params) !== "{}") {
+            if (params.gameMode) {
+                splash.style.display = 'block';
+                if (["honeycam", "boloji", "weile"].includes(params.appChannel)) {
+                    loadingTxt.style.display = 'block';
+                    if (params.appChannel === "weile") {
+                        var loadingTxtTop = '50px';
+                        var loadingTxt_wei = "The game does not offer \"real money gambling\" or an opportunity to win real money or prizes.";
+                        if(params.language){
+                            var language = parseInt(params.language);
+                            if(language === 1){
+                                loadingTxtTop = '35px';
+                                loadingTxt_wei = "遊戲不提供「現金交易賭博」，也沒有機會贏得現金或實體獎品。"
+                            }else if(language === 3){
+                                loadingTxt_wei = "Game ini tidak menawarkan \"perjudian uang sungguhan\" atau peluang untuk memenangkan uang sungguhan atau hadiah.";
+                            }else if(language === 5){
+                                loadingTxtTop = '35px';
+                                loadingTxt_wei = "เกมนี้ไม่มี \"การพนันด้วยเงินจริง\" หรือโอกาสในการชนะเงินหรือรางวัลจริง";
+                            }else if(language === 6){
+                                loadingTxt_wei = "Trò chơi không cung cấp hoạt động \"\"đánh bạc bằng tiền thật\"\" hoặc cơ hội để giành chiến thắng tiền thật hoặc giải thưởng tiền mặt.";
+                            }
+                        }
+                        loadingTxt.style.marginTop = loadingTxtTop;
+                        loadingTxt.innerHTML = loadingTxt_wei;
+                    }
+                }
+                if (params.gameMode == '2') {
+                    splash.style.backgroundImage = "url('minibg.c5b69.jpg')";
+                    var realHalfScrren = ['halolive', 'ishow', 'hilla', 'timo', 'nonolive'];
+                    var isAutoAdapt = false;
+                    if (realHalfScrren.includes(params.appChannel) || params.adaption == '1' || isAutoAdapt) {
+                        splash.style.backgroundSize = "100% 100%";
+                    } else {
+                        splash.style.backgroundPosition = "0% 0%"
+                        splash.style.bottom = "-58%"
+                        loading.style.top = "21%"
+                        loadingTxt.style.top = "21%"
+                    }
+                } else if (params.gameMode == '3') {
+                    splash.style.backgroundImage = "url('bigbg.1d9fd.jpg')";
+                    splash.style.backgroundSize = "100% 100%";
+                }
+            } else {
+                splash.style.display = 'none';
+            }
+            //上报进度
+            if (BSUtils) {
+                //加载report
+                BSUtils.loadReport(() => {
+                    //初始化report
+                    var gameId = 1022;
+                    var env = 1;
+                    var appChannel = '';
+                    if(params.appChannel){
+                        appChannel = params.appChannel;
+                    } else if(params.alias){
+                        appChannel = params.alias;
+                    }
+                    BSUtils.initReport(appChannel, gameId, env);
+                    //上报节点1
+                    BSUtils.reportProcess(1,params.appId ? params.appId : 0,params.userId ? params.userId : '')
+                    var canvas = document.createElement('canvas');
+                    var gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+                    if (gl) {
+                        console.log('支持WebGL')
+                    } else {
+                        BSUtils.reportProcess(7,params.appId ? params.appId : 0,params.userId ? params.userId : '')
+                    }
+                })
+                //加载渠道
+                BSUtils.loadAppChannel(()=>{
+                    let channel = params.appChannel;
+                    if (params.alias){
+                        channel = params.alias;
+                    }
+                    BSUtils.initAppChannel(channel);
+                })
+            }
+            //Unity
+            if(params.isUnity && params.isUnity === '1'){
+                window['isUnity'] = true;
+            }
+        } else {
+            splash.style.display = 'none';
+        }
+    })();
+
+    function closeLoadingBg() {
+        var splash = document.getElementById('splash');
+        if (splash) {
+            splash.style.display = 'none';
+        }
+    }
+
+    function showShaderRect(rects) {
+        for (var i in rects) {
+            let obj = rects[i];
+            if (obj) {
+                var shaderRect = document.createElement("div");
+                shaderRect.setAttribute("id", "shaderRect");
+                document.body.appendChild(shaderRect);
+                shaderRect.style.position = 'absolute';
+                shaderRect.style.backgroundColor = 'rgba(0, 0, 0, 0)'
+
+                var withNum = obj.width * 100 + '%';
+                var heightNum = obj.height * 100 + '%';
+                var bottomNum = obj.bottom * 100 + '%';
+                var leftNum = (0.5 - obj.width / 2) * 100 + '%';
+                shaderRect.style.width = withNum;
+                shaderRect.style.height = heightNum;
+                shaderRect.style.bottom = bottomNum;
+                shaderRect.style.left = leftNum;
+            }
+        }
+    }
+
+    function hideShaderRect() {
+        var divs = document.querySelectorAll('div')
+        for (var i = 0; i < divs.length; i++) {
+            var element = divs[i];
+            if (element.id == 'shaderRect') {
+                element.remove();
+            }
+        }
+    }
+
+    window.isGameOnHide = false;
+    function updateVisibilityStatus() {
+        window.isGameOnHide = document.hidden;
+    }
+    document.addEventListener('visibilitychange', updateVisibilityStatus);
+
+</script>
+</body>
+
 </html>

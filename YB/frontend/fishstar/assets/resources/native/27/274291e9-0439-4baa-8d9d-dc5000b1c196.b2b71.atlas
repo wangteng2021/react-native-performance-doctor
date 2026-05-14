@@ -1,0 +1,62 @@
+
+baozha_lingdang.png
+size: 223,471
+format: RGBA8888
+filter: Linear,Linear
+repeat: none
+bq2
+  rotate: false
+  xy: 125, 2
+  size: 92, 90
+  orig: 100, 100
+  offset: 3, 6
+  index: -1
+dd_4
+  rotate: false
+  xy: 102, 86
+  size: 21, 21
+  orig: 25, 25
+  offset: 2, 2
+  index: -1
+ddx
+  rotate: false
+  xy: 134, 94
+  size: 75, 75
+  orig: 80, 78
+  offset: 3, 3
+  index: -1
+faguang
+  rotate: false
+  xy: 2, 270
+  size: 219, 199
+  orig: 219, 199
+  offset: 0, 0
+  index: -1
+gss
+  rotate: true
+  xy: 2, 139
+  size: 129, 130
+  orig: 155, 137
+  offset: 14, 5
+  index: -1
+lingdang
+  rotate: true
+  xy: 134, 171
+  size: 97, 77
+  orig: 97, 77
+  offset: 0, 0
+  index: -1
+quan
+  rotate: false
+  xy: 2, 39
+  size: 98, 98
+  orig: 100, 100
+  offset: 1, 1
+  index: -1
+xx
+  rotate: false
+  xy: 102, 109
+  size: 28, 28
+  orig: 30, 30
+  offset: 1, 1
+  index: -1

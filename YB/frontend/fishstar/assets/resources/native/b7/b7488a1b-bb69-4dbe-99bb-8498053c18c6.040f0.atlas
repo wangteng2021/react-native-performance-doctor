@@ -1,0 +1,62 @@
+
+baozha_shendeng.png
+size: 384,268
+format: RGBA8888
+filter: Linear,Linear
+repeat: none
+bq2
+  rotate: true
+  xy: 250, 31
+  size: 92, 90
+  orig: 100, 100
+  offset: 3, 6
+  index: -1
+dd_4
+  rotate: false
+  xy: 79, 26
+  size: 21, 21
+  orig: 25, 25
+  offset: 2, 2
+  index: -1
+ddx
+  rotate: false
+  xy: 2, 2
+  size: 75, 75
+  orig: 80, 78
+  offset: 3, 3
+  index: -1
+gss
+  rotate: false
+  xy: 253, 136
+  size: 129, 130
+  orig: 155, 137
+  offset: 14, 5
+  index: -1
+quan
+  rotate: false
+  xy: 150, 25
+  size: 98, 98
+  orig: 100, 100
+  offset: 1, 1
+  index: -1
+shendeng3
+  rotate: true
+  xy: 150, 125
+  size: 141, 101
+  orig: 141, 101
+  offset: 0, 0
+  index: -1
+shendeng3_g
+  rotate: true
+  xy: 2, 79
+  size: 187, 146
+  orig: 187, 146
+  offset: 0, 0
+  index: -1
+xx
+  rotate: false
+  xy: 79, 49
+  size: 28, 28
+  orig: 30, 30
+  offset: 1, 1
+  index: -1

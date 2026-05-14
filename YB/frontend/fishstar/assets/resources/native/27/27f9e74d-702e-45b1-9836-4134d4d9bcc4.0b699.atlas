@@ -1,0 +1,62 @@
+
+paotai03.png
+size: 512,256
+format: RGBA8888
+filter: Linear,Linear
+repeat: none
+guang_a
+  rotate: false
+  xy: 338, 199
+  size: 24, 51
+  orig: 24, 51
+  offset: 0, 0
+  index: -1
+paoguang
+  rotate: false
+  xy: 286, 177
+  size: 50, 73
+  orig: 50, 73
+  offset: 0, 0
+  index: -1
+paotai02
+  rotate: false
+  xy: 2, 125
+  size: 152, 125
+  orig: 152, 125
+  offset: 0, 0
+  index: -1
+paotai02_paokouguang
+  rotate: true
+  xy: 2, 2
+  size: 121, 145
+  orig: 121, 145
+  offset: 0, 0
+  index: -1
+qianduan01
+  rotate: false
+  xy: 286, 144
+  size: 29, 31
+  orig: 29, 31
+  offset: 0, 0
+  index: -1
+qianduan02
+  rotate: false
+  xy: 364, 219
+  size: 29, 31
+  orig: 29, 31
+  offset: 0, 0
+  index: -1
+youbian01
+  rotate: false
+  xy: 156, 140
+  size: 63, 110
+  orig: 63, 110
+  offset: 0, 0
+  index: -1
+zuobian01
+  rotate: false
+  xy: 221, 140
+  size: 63, 110
+  orig: 63, 110
+  offset: 0, 0
+  index: -1

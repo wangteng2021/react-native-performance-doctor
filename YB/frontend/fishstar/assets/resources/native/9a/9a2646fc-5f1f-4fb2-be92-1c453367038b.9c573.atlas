@@ -1,0 +1,55 @@
+
+paotai04.png
+size: 512,256
+format: RGBA8888
+filter: Linear,Linear
+repeat: none
+cibang_01
+  rotate: false
+  xy: 353, 201
+  size: 62, 52
+  orig: 62, 52
+  offset: 0, 0
+  index: -1
+cibang_02
+  rotate: false
+  xy: 118, 56
+  size: 62, 52
+  orig: 62, 52
+  offset: 0, 0
+  index: -1
+paokou001
+  rotate: true
+  xy: 2, 42
+  size: 66, 114
+  orig: 66, 114
+  offset: 0, 0
+  index: -1
+paotaiguangxiao_02
+  rotate: false
+  xy: 2, 110
+  size: 189, 143
+  orig: 189, 143
+  offset: 0, 0
+  index: -1
+qianfeiji  006
+  rotate: false
+  xy: 353, 145
+  size: 37, 54
+  orig: 37, 54
+  offset: 0, 0
+  index: -1
+qianfeiji 005
+  rotate: true
+  xy: 2, 2
+  size: 38, 53
+  orig: 38, 53
+  offset: 0, 0
+  index: -1
+zuodian002
+  rotate: false
+  xy: 193, 131
+  size: 158, 122
+  orig: 158, 122
+  offset: 0, 0
+  index: -1

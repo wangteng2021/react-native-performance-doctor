@@ -1,0 +1,62 @@
+
+paotai06.png
+size: 1024,128
+format: RGBA8888
+filter: Linear,Linear
+repeat: none
+guang_1
+  rotate: true
+  xy: 888, 78
+  size: 45, 84
+  orig: 45, 84
+  offset: 0, 0
+  index: -1
+paoguan
+  rotate: true
+  xy: 297, 50
+  size: 73, 129
+  orig: 73, 129
+  offset: 0, 0
+  index: -1
+paotai
+  rotate: false
+  xy: 146, 14
+  size: 149, 109
+  orig: 149, 109
+  offset: 0, 0
+  index: -1
+paotai01_paokouguang
+  rotate: true
+  xy: 2, 2
+  size: 121, 142
+  orig: 121, 142
+  offset: 0, 0
+  index: -1
+youbian
+  rotate: false
+  xy: 660, 62
+  size: 112, 61
+  orig: 112, 61
+  offset: 0, 0
+  index: -1
+youbian_wu
+  rotate: false
+  xy: 428, 63
+  size: 114, 60
+  orig: 114, 60
+  offset: 0, 0
+  index: -1
+zuobian
+  rotate: false
+  xy: 774, 62
+  size: 112, 61
+  orig: 112, 61
+  offset: 0, 0
+  index: -1
+zuobian_wu
+  rotate: false
+  xy: 544, 63
+  size: 114, 60
+  orig: 114, 60
+  offset: 0, 0
+  index: -1

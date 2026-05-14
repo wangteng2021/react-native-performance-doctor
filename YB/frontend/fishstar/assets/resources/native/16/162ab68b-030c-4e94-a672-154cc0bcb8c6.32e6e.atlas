@@ -1,0 +1,167 @@
+
+paotai10.png
+size: 1024,512
+format: RGBA8888
+filter: Linear,Linear
+repeat: none
+body
+  rotate: false
+  xy: 222, 343
+  size: 150, 165
+  orig: 150, 165
+  offset: 0, 0
+  index: -1
+cibang01
+  rotate: false
+  xy: 2, 345
+  size: 218, 163
+  orig: 218, 163
+  offset: 0, 0
+  index: -1
+cibang02
+  rotate: false
+  xy: 655, 298
+  size: 69, 101
+  orig: 69, 101
+  offset: 0, 0
+  index: -1
+cibang03
+  rotate: false
+  xy: 2, 180
+  size: 218, 163
+  orig: 218, 163
+  offset: 0, 0
+  index: -1
+cibang04
+  rotate: false
+  xy: 726, 298
+  size: 69, 101
+  orig: 69, 101
+  offset: 0, 0
+  index: -1
+cibang_00001
+  rotate: false
+  xy: 222, 234
+  size: 126, 107
+  orig: 126, 107
+  offset: 0, 0
+  index: -1
+cibang_00002
+  rotate: false
+  xy: 374, 401
+  size: 126, 107
+  orig: 126, 107
+  offset: 0, 0
+  index: -1
+cibang_00003
+  rotate: false
+  xy: 502, 401
+  size: 126, 107
+  orig: 126, 107
+  offset: 0, 0
+  index: -1
+cibang_00004
+  rotate: false
+  xy: 630, 401
+  size: 126, 107
+  orig: 126, 107
+  offset: 0, 0
+  index: -1
+cibang_00005
+  rotate: false
+  xy: 758, 401
+  size: 126, 107
+  orig: 126, 107
+  offset: 0, 0
+  index: -1
+cibang_00006
+  rotate: false
+  xy: 886, 401
+  size: 126, 107
+  orig: 126, 107
+  offset: 0, 0
+  index: -1
+cibang_00007
+  rotate: true
+  xy: 125, 52
+  size: 126, 107
+  orig: 126, 107
+  offset: 0, 0
+  index: -1
+cibang_00008
+  rotate: true
+  xy: 234, 106
+  size: 126, 107
+  orig: 126, 107
+  offset: 0, 0
+  index: -1
+cibang_00009
+  rotate: false
+  xy: 527, 292
+  size: 126, 107
+  orig: 126, 107
+  offset: 0, 0
+  index: -1
+guang02
+  rotate: true
+  xy: 2, 2
+  size: 32, 72
+  orig: 32, 72
+  offset: 0, 0
+  index: -1
+paoguan01
+  rotate: true
+  xy: 797, 356
+  size: 43, 126
+  orig: 43, 126
+  offset: 0, 0
+  index: -1
+paoguan02
+  rotate: true
+  xy: 797, 311
+  size: 43, 126
+  orig: 43, 126
+  offset: 0, 0
+  index: -1
+paohuo01
+  rotate: true
+  xy: 374, 366
+  size: 33, 151
+  orig: 33, 151
+  offset: 0, 0
+  index: -1
+paotai06_paokouguang
+  rotate: false
+  xy: 2, 36
+  size: 121, 142
+  orig: 121, 142
+  offset: 0, 0
+  index: -1
+xingxing
+  rotate: false
+  xy: 350, 326
+  size: 16, 15
+  orig: 16, 15
+  offset: 0, 0
+  index: -1
+yingqing01
+  rotate: true
+  xy: 234, 52
+  size: 52, 55
+  orig: 52, 55
+  offset: 0, 0
+  index: -1
+yingqing02
+  rotate: false
+  xy: 925, 344
+  size: 52, 55
+  orig: 52, 55
+  offset: 0, 0
+  index: -1
+yingqingguang01
+  rotate: false
+  xy: 291, 52
+  size: 54, 52
+  orig: 54, 52
+  offset: 0, 0
+  index: -1

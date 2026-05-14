@@ -1,0 +1,62 @@
+
+fish_20003.png
+size: 256,256
+format: RGBA8888
+filter: Linear,Linear
+repeat: none
+idle_01_gold
+  rotate: false
+  xy: 2, 23
+  size: 129, 79
+  orig: 129, 79
+  offset: 0, 0
+  index: -1
+idle_02_body
+  rotate: false
+  xy: 2, 104
+  size: 144, 141
+  orig: 144, 141
+  offset: 0, 0
+  index: -1
+idle_03_head
+  rotate: false
+  xy: 148, 186
+  size: 100, 59
+  orig: 100, 59
+  offset: 0, 0
+  index: -1
+idle_04
+  rotate: false
+  xy: 2, 2
+  size: 48, 19
+  orig: 48, 19
+  offset: 0, 0
+  index: -1
+idle_05_hand
+  rotate: true
+  xy: 148, 129
+  size: 55, 104
+  orig: 55, 104
+  offset: 0, 0
+  index: -1
+idle_06_hand
+  rotate: true
+  xy: 148, 72
+  size: 55, 104
+  orig: 55, 104
+  offset: 0, 0
+  index: -1
+idle_07_feet
+  rotate: false
+  xy: 133, 30
+  size: 47, 40
+  orig: 47, 40
+  offset: 0, 0
+  index: -1
+idle_08_feet
+  rotate: false
+  xy: 182, 30
+  size: 47, 40
+  orig: 47, 40
+  offset: 0, 0
+  index: -1
