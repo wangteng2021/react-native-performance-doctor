@@ -18,13 +18,7 @@
 
     Report.prototype.httpAddress = ''
     Report.prototype.initServer = function () {
-        if (this.env === 0) {
-            this.httpAddress = 'https://game-gm-log-server.jieyou.shop/client_log/dev/add';
-        } else if (this.env === 1) {
-            this.httpAddress = 'https://game-gm-log-server.jieyou.shop/client_log/test/add';
-        } else {
-            this.httpAddress = 'https://game-gm-log-server.jieyou.shop/client_log/prod/add';
-        }
+        this.httpAddress = '';
     }
     /**
      * 上报加载进度
@@ -41,6 +35,7 @@
      * @param userId 用户真实Id
      */
     Report.prototype.webProcess = function (type, ms, appId, userId) {
+        if (!this.httpAddress) return;
         const xhr = new XMLHttpRequest();
         xhr.open('POST', this.httpAddress);
         xhr.setRequestHeader('Content-type', 'application/json');
