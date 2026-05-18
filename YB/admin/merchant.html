@@ -75,6 +75,8 @@
           <p class="subtle" style="margin-bottom: 16px;">
             优先级:本商户×本游戏 &gt; 本游戏默认 &gt; 全局兜底。
             <code>bigWinMultiplier</code> 也决定大奖动画阈值。
+            FishStar 捕鱼只用 <code>rtpTarget</code> 控制击杀率,按鱼种固定 2~6 倍派奖;
+            新手保护 / Bet-Tier / 冷却字段主要用于老虎机。
           </p>
           <form id="strategyForm" class="form-grid">
             <label>大奖动画阈值(倍数)<input name="bigWinMultiplier" type="number" min="1" max="1000" step="1" /></label>
@@ -87,6 +89,7 @@
           <p class="subtle" style="margin-bottom: 12px;">
             玩家 spin_count &lt; 下方 <code>spins</code> 时走 new-user-* 路径。
             出保护期后回到 base + Bet-Tier 路径,RTP 收敛到 <code>rtpTarget</code>。
+            FishStar 捕鱼不走这套保护期路径。
           </p>
           <form id="newUserForm" class="form-grid">
             <label>保护期局数(spins)<input name="spins" type="number" min="0" max="1000" step="1" /></label>
@@ -172,6 +175,9 @@
             <label>生成游戏<select id="codeGameSelector" name="gameId" style="background:#0f1729;color:#e2e8f0;border:1px solid #334155;border-radius:6px;padding:6px 10px;min-width:240px;font-weight:600;"></select></label>
             <label>Code 前缀<input name="prefix" value="qa-test" maxlength="40" /></label>
             <label>生成数量<input name="count" type="number" min="1" max="100" value="1" /></label>
+            <label>初始余额<input name="initialBalance" type="number" min="0" step="1" value="100000" /></label>
+            <label>FishStar 用户 ID<input name="externalUserId" placeholder="同一 ID 复用同一玩家" maxlength="100" /></label>
+            <label>FishStar 显示模式<select name="displayMode"><option value="half">半屏</option><option value="full">全屏</option></select></label>
             <label>场景标签<input name="scenario" value="new-user-journey" maxlength="40" /></label>
             <label class="wide">备注<input name="note" placeholder="给 QA 测试xxx" maxlength="200" /></label>
             <button class="primary-button" type="submit">生成 Code</button>
@@ -205,8 +211,18 @@
         <div class="panel">
           <div class="panel-title">
             <h2>玩家</h2>
-            <button id="refreshPlayers" class="ghost-button" type="button">刷新</button>
+            <div style="display:flex;gap:10px;align-items:center;">
+              <span id="creditStatus" class="status">就绪</span>
+              <button id="refreshPlayers" class="ghost-button" type="button">刷新</button>
+            </div>
           </div>
+          <form id="creditForm" class="form-grid" style="margin-bottom: 18px;">
+            <label>用户 ID<input name="externalUserId" placeholder="FishStar / 外部用户 ID" maxlength="100" /></label>
+            <label>游戏<select id="creditGameSelector" name="gameId"></select></label>
+            <label>加金币数量<input name="amount" type="number" min="0.01" step="0.01" /></label>
+            <label class="wide">备注<input name="note" placeholder="例如 QA 补币、客服调账" maxlength="200" /></label>
+            <button class="primary-button" type="submit">给玩家加金币</button>
+          </form>
           <div id="playerList" class="txn-table-wrap empty"><p class="subtle">加载中...</p></div>
         </div>
       </section>
@@ -366,7 +382,9 @@
           if (!enabledGames.length) {
             gameSelector.innerHTML = '<option value="">— 请先开通游戏 —</option>';
             codeGameSelector.innerHTML = '<option value="">— 请先开通游戏 —</option>';
+            creditGameSelector.innerHTML = '<option value="">— 请先开通游戏 —</option>';
             codeGameSelector.disabled = true;
+            creditGameSelector.disabled = true;
             currentGameId = null;
           } else {
             const gameOptions = enabledGames.map((g) =>
@@ -374,15 +392,19 @@
             ).join("");
             gameSelector.innerHTML = gameOptions;
             codeGameSelector.innerHTML = gameOptions;
+            creditGameSelector.innerHTML = gameOptions;
             codeGameSelector.disabled = false;
+            creditGameSelector.disabled = false;
             if (prev && enabledGames.find((g) => g.gameId === prev)) {
               currentGameId = prev;
               gameSelector.value = prev;
               codeGameSelector.value = prev;
+              creditGameSelector.value = prev;
             } else {
               currentGameId = enabledGames[0].gameId;
               gameSelector.value = currentGameId;
               codeGameSelector.value = currentGameId;
+              creditGameSelector.value = currentGameId;
             }
           }
 
@@ -401,6 +423,7 @@
           currentGameId = gameId || null;
           gameSelector.value = currentGameId || "";
           codeGameSelector.value = currentGameId || "";
+          creditGameSelector.value = currentGameId || "";
           reloadCurrentGameData();
         }
 
@@ -568,8 +591,10 @@
                 <div>
                   <p class="code-value">${YBAdmin.escapeHtml(c.code)}</p>
                   <p class="meta">
-                    extUserId: ${YBAdmin.escapeHtml(c.externalUserId)} ·
                     game: <code>${YBAdmin.escapeHtml(c.gameId || "—")}</code> ·
+                    用户: <code>${YBAdmin.escapeHtml(c.externalUserId || "—")}</code> ·
+                    余额: ${YBAdmin.fmtNumber(c.initialBalance || 0)} ·
+                    ${c.displayMode ? `模式: ${c.displayMode === "full" ? "全屏" : "半屏"} ·` : ""}
                     ${YBAdmin.escapeHtml(c.scenario)} ·
                     ${YBAdmin.escapeHtml(c.createdAt)}
                     ${c.consumedAt ? ` · 已使用 ${YBAdmin.escapeHtml(c.consumedAt)}` : ""}
@@ -611,8 +636,19 @@
             prefix: fd.get("prefix"),
             count: Number(fd.get("count")),
             scenario: fd.get("scenario"),
+            initialBalance: fd.get("initialBalance"),
             note: fd.get("note")
           };
+          const displayMode = String(fd.get("displayMode") || "half");
+          const externalUserId = String(fd.get("externalUserId") || "").trim();
+          if (currentGameId === "fishstar") {
+            if (!externalUserId) {
+              YBAdmin.setStatusOn(codeStatus, "FishStar 用户 ID 必填", false);
+              return;
+            }
+            payload.displayMode = displayMode;
+            payload.externalUserId = externalUserId;
+          }
           try {
             const r = await fetch(YBAdmin.apiUrl("/api/admin/test-codes/generate"), {
               method: "POST",
@@ -681,6 +717,53 @@
 
         // ========== 玩家 Tab ==========
         const playerList = document.getElementById("playerList");
+        const creditForm = document.getElementById("creditForm");
+        const creditGameSelector = document.getElementById("creditGameSelector");
+        const creditStatus = document.getElementById("creditStatus");
+
+        async function onCreditPlayer(event) {
+          event.preventDefault();
+          const fd = new FormData(creditForm);
+          const externalUserId = String(fd.get("externalUserId") || "").trim();
+          const gameId = String(fd.get("gameId") || "").trim();
+          const amount = Number(fd.get("amount"));
+          if (!externalUserId) {
+            YBAdmin.setStatusOn(creditStatus, "用户 ID 必填", false);
+            return;
+          }
+          if (!gameId) {
+            YBAdmin.setStatusOn(creditStatus, "游戏必选", false);
+            return;
+          }
+          if (!Number.isFinite(amount) || amount <= 0) {
+            YBAdmin.setStatusOn(creditStatus, "金额必须大于 0", false);
+            return;
+          }
+          YBAdmin.setStatusOn(creditStatus, "加金币中...");
+          try {
+            const r = await fetch(YBAdmin.apiUrl(`/api/admin/merchants/${encodeURIComponent(merchantId)}/players/credit`), {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                externalUserId,
+                gameId,
+                amount,
+                note: fd.get("note")
+              })
+            });
+            const data = await r.json();
+            if (!data.ok) throw new Error(data.error || "credit failed");
+            YBAdmin.setStatusOn(creditStatus, `已加 ${YBAdmin.fmtNumber(amount)},余额 ${YBAdmin.fmtNumber(data.balanceAfter)}`);
+            creditForm.querySelector('[name="amount"]').value = "";
+            creditForm.querySelector('[name="note"]').value = "";
+            await loadPlayers();
+            await loadTxns();
+            await loadOverview();
+          } catch (e) {
+            YBAdmin.setStatusOn(creditStatus, e.message, false);
+          }
+        }
+
         async function loadPlayers() {
           try {
             const data = await YBAdmin.fetchJson(`/api/admin/merchants/${encodeURIComponent(merchantId)}/players?limit=100`);
@@ -719,6 +802,7 @@
           }
         }
         document.getElementById("refreshPlayers").addEventListener("click", loadPlayers);
+        creditForm.addEventListener("submit", onCreditPlayer);
 
         // ========== 顶部按钮 ==========
         document.getElementById("rotateSecretBtn").addEventListener("click", async () => {
