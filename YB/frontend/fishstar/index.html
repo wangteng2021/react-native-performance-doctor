@@ -4,7 +4,28 @@
 <head>
     <script>
       (function () {
-        var query = "gsp=101&sceneMode=2&adaption=1&currencyIcon=diamondIcon.png&aspectRatio=1&gameMode=2&gameId=FishStar&appId=7990057035&appChannel=chatna&roomId=85422171&userId=40002157&lang=2&language=2&code=3489b80a-925c-413b-8813-8c8d7b0fa14e&isDataByUrl=1&gameId=FishStar";
+        var incoming = new URLSearchParams(window.location.search);
+        var queryParams = new URLSearchParams();
+        queryParams.set("gsp", "101");
+        queryParams.set("sceneMode", "2");
+        queryParams.set("adaption", "1");
+        queryParams.set("currencyIcon", "diamondIcon.png");
+        queryParams.set("aspectRatio", "1");
+        queryParams.set("gameMode", incoming.get("gameMode") || "2");
+        queryParams.append("gameId", "FishStar");
+        queryParams.set("appId", "7990057035");
+        queryParams.set("appChannel", "chatna");
+        queryParams.set("roomId", incoming.get("roomId") || "85422171");
+        var fishstarUserId = incoming.get("userId") || incoming.get("fishstarUserId");
+        if (fishstarUserId) queryParams.set("userId", fishstarUserId);
+        queryParams.set("lang", "2");
+        queryParams.set("language", "2");
+        queryParams.set("code", incoming.get("fishstarCode") || incoming.get("code") || "3489b80a-925c-413b-8813-8c8d7b0fa14e");
+        queryParams.set("isDataByUrl", "1");
+        if (incoming.get("embed")) queryParams.set("embed", incoming.get("embed"));
+        if (incoming.get("backurl")) queryParams.set("backurl", incoming.get("backurl"));
+        queryParams.append("gameId", "FishStar");
+        var query = queryParams.toString();
         if (window.location.search.slice(1) !== query) {
           window.history.replaceState(null, '', window.location.pathname + '?' + query + window.location.hash);
         }
@@ -57,9 +78,9 @@
     <p id="loadingTxt" style="display: none;">Loading, please wait patiently</p>
 </div>
 
-<script src="src/settings.ybpx2.js" charset="utf-8"></script>
+<script src="src/settings.ybpx4.js?v=202605151605" charset="utf-8"></script>
 
-<script src="main.ybpx2.js" charset="utf-8"></script>
+<script src="main.ybpx2.js?v=202605151730" charset="utf-8"></script>
 
 <script src="lib/js/BSUtils.js?v=5.6.6"></script>
 

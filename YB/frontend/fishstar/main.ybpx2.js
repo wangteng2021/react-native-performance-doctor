@@ -6,6 +6,62 @@ window.boot = function () {
     var RESOURCES = cc.AssetManager.BuiltinBundleName.RESOURCES;
     var INTERNAL = cc.AssetManager.BuiltinBundleName.INTERNAL;
     var MAIN = cc.AssetManager.BuiltinBundleName.MAIN;
+
+    function registerResumeFallback () {
+        if (!cc.sys.isBrowser || window.__fishstarResumeFallbackRegistered) {
+            return;
+        }
+
+        window.__fishstarResumeFallbackRegistered = true;
+
+        var pendingResumeFallback = false;
+
+        var isPageHidden = function () {
+            return document.hidden === true || document.webkitHidden === true || document.mozHidden === true || document.msHidden === true;
+        };
+
+        var resumeIfVisible = function () {
+            if (isPageHidden()) {
+                pendingResumeFallback = false;
+                return;
+            }
+
+            if (pendingResumeFallback) {
+                return;
+            }
+
+            pendingResumeFallback = true;
+
+            window.setTimeout(function () {
+                pendingResumeFallback = false;
+
+                if (isPageHidden()) {
+                    return;
+                }
+
+                if (cc.game && typeof cc.game.isPaused === 'function' && cc.game.isPaused()) {
+                    if (typeof cc.game.emit === 'function' && typeof cc.game.EVENT_SHOW !== 'undefined') {
+                        cc.game.emit(cc.game.EVENT_SHOW);
+                    }
+
+                    if (cc.game.isPaused() && typeof cc.game.resume === 'function') {
+                        cc.game.resume();
+                    }
+                }
+
+                if (cc.director && typeof cc.director.isPaused === 'function' && cc.director.isPaused() && typeof cc.director.resume === 'function') {
+                    cc.director.resume();
+                }
+            }, 0);
+        };
+
+        document.addEventListener('visibilitychange', resumeIfVisible, false);
+        window.addEventListener('pageshow', resumeIfVisible, false);
+        window.addEventListener('focus', resumeIfVisible, false);
+    }
+
+    registerResumeFallback();
+
     function setLoadingDisplay () {
         // Loading splash scene
         var splash = document.getElementById('splash');
