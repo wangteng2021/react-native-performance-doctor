@@ -72,6 +72,41 @@ function rowToEntry(row) {
   };
 }
 
+function loadMerchantPlayer(db, merchantId, externalUserId, gameId) {
+  return db.prepare(
+    `SELECT id, score
+       FROM players
+      WHERE merchant_id = ? AND external_user_id = ? AND game_id = ?`
+  ).get(merchantId, externalUserId, gameId);
+}
+
+function creditExistingPlayer(db, entry, playerId) {
+  const credit = Number(entry.initialBalance) || 0;
+  if (credit <= 0) return;
+  const player = db.prepare("SELECT id, score FROM players WHERE id = ?").get(playerId);
+  if (!player) return;
+  const balanceBefore = Number(player.score) || 0;
+  const balanceAfter = Math.round((balanceBefore + credit) * 10) / 10;
+  db.prepare("UPDATE players SET score = ?, updated_at = datetime('now') WHERE id = ?").run(balanceAfter, player.id);
+  db.prepare(
+    `INSERT INTO transactions
+       (txn_id, merchant_id, external_user_id, game_id, player_id, type, amount, balance_before, balance_after, round_id, meta)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    `test-code-credit-${entry.merchantId}-${player.id}-${Date.now()}-${crypto.randomBytes(4).toString("hex")}`,
+    entry.merchantId,
+    entry.externalUserId,
+    entry.gameId,
+    player.id,
+    "test_code_credit",
+    credit,
+    balanceBefore,
+    balanceAfter,
+    entry.code,
+    JSON.stringify({ source: "test-code-generate", note: entry.note || null })
+  );
+}
+
 function generateTestCodes(options = {}, origin = "") {
   const db = getDb();
   const merchantId = options.merchantId ? normalizeSlug(options.merchantId, "") : null;
@@ -108,6 +143,9 @@ function generateTestCodes(options = {}, origin = "") {
   );
   const insertMany = db.transaction((entries) => {
     entries.forEach((entry) => {
+      const existingFishStarPlayer = entry.gameId === "fishstar"
+        ? loadMerchantPlayer(db, entry.merchantId, entry.externalUserId, entry.gameId)
+        : null;
       stmt.run(
         entry.code,
         entry.prefix,
@@ -120,6 +158,10 @@ function generateTestCodes(options = {}, origin = "") {
         entry.externalUserId,
         entry.gameId
       );
+      if (existingFishStarPlayer) {
+        creditExistingPlayer(db, entry, existingFishStarPlayer.id);
+        return;
+      }
       resolvePlayerFromAuthInput({
         merchantId: entry.merchantId,
         externalUserId: entry.externalUserId,
