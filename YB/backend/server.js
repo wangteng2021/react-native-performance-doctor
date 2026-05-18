@@ -1,5 +1,4 @@
 const http = require("node:http");
-const https = require("node:https");
 const path = require("node:path");
 const fs = require("node:fs");
 const crypto = require("node:crypto");
@@ -61,8 +60,6 @@ if (!process.env.EMBED_SESSION_SECRET) {
   console.warn("[security] EMBED_SESSION_SECRET not set; using process-local fallback. Set it in production for stable embed sessions.");
 }
 const EMBED_SESSION_MAX_AGE_SECONDS = 86400;
-const FISHSTAR_UPSTREAM_ORIGIN = "https://game-cn-test.jieyou.shop";
-const FISHSTAR_UPSTREAM_HOST = "game-cn-test.jieyou.shop";
 // 多 repo 部署:推荐目录布局 /www/wwwroot/wtns/{server,admin,official,games/<gameId>},
 // 默认值就是这个相对结构(__dirname 是 server/backend,..往上一级再分别找 sibling repo)。
 // 部署目录不一致时通过下面 3 个 env 覆盖。
@@ -382,7 +379,6 @@ function renderPlayFrame({ code, merchantId, gameId, externalUserId }) {
       <span><strong>Code</strong> <code>${esc(code)}</code></span>
       <span><strong>Merchant</strong> <code>${esc(merchantId)}</code></span>
       <span><strong>Game</strong> <code>${esc(gameId)}</code></span>
-      <span><strong>User</strong> <code>${esc(externalUserId)}</code></span>
     </div>
     <div class="toolbar">
       <button class="btn" id="btnReload" title="重新载入 iframe(token 已被消费,刷一次会生成新 token)">↻ 重载</button>
@@ -503,6 +499,47 @@ function authInputFromEmbedSession(session) {
   };
 }
 
+function buildEmbedLocation(assetUrl, consumed) {
+  const location = new URL(assetUrl, "http://yb.local");
+  const params = location.searchParams;
+  if (consumed.gameId === "fishstar") {
+    const payload = consumed.payload || {};
+    const userId = String(payload.fishstarUserId ?? payload.userId ?? consumed.externalUserId ?? "").trim();
+    if (userId) params.set("userId", userId);
+    params.set("gameMode", payload.displayMode === "full" ? "1" : "2");
+    params.set("embed", "1");
+    params.set("backurl", "openurl://closegame");
+  } else {
+    params.set("lang", consumed.payload.lang || "en");
+    params.set("embed", "1");
+    params.set("backurl", "openurl://closegame");
+  }
+  return `${location.pathname}${location.search}${location.hash}`;
+}
+
+function getFishStarSessionUserId(session) {
+  if (!session) return "";
+  const payload = session.payload || {};
+  return String(payload.fishstarUserId ?? payload.userId ?? session.externalUserId ?? "").trim();
+}
+
+function enforceFishStarQueryUserId(url, session) {
+  const sessionUserId = getFishStarSessionUserId(session);
+  const requestedUserId = String(url.searchParams.get("userId") || url.searchParams.get("fishstarUserId") || "").trim();
+  return !requestedUserId || requestedUserId === sessionUserId;
+}
+
+function buildFishStarUpstreamSearch(url, session) {
+  const params = new URLSearchParams(url.searchParams);
+  const sessionUserId = getFishStarSessionUserId(session);
+  if (sessionUserId) {
+    if (params.has("user_id")) params.set("user_id", sessionUserId);
+    if (params.has("userId")) params.set("userId", sessionUserId);
+  }
+  const search = params.toString();
+  return search ? `?${search}` : "";
+}
+
 function requireAdminSession(request, response) {
   const session = getAdminSession(request);
   if (!session) {
@@ -510,6 +547,22 @@ function requireAdminSession(request, response) {
     return null;
   }
   return session;
+}
+
+function findAdminCreditPlayer(dbInst, merchantId, externalUserId, gameId) {
+  if (gameId) {
+    return dbInst.prepare(
+      `SELECT id, merchant_id, external_user_id, game_id, score
+         FROM players
+        WHERE merchant_id = ? AND external_user_id = ? AND game_id = ?`
+    ).get(merchantId, externalUserId, gameId);
+  }
+  return dbInst.prepare(
+    `SELECT id, merchant_id, external_user_id, game_id, score
+       FROM players
+      WHERE merchant_id = ? AND external_user_id = ?
+      ORDER BY id`
+  ).all(merchantId, externalUserId);
 }
 
 function sendText(response, statusCode, body, contentType = "text/plain; charset=utf-8") {
@@ -562,8 +615,486 @@ function rewriteFishStarRouteResponse(payload, request) {
   return payload;
 }
 
+function buildFishStarRouteResponse(request) {
+  const origin = getPublicOrigin(request);
+  return {
+    code: 200,
+    errCode: 0,
+    data: {
+      http_addr: `${origin}/fishstar-proxy/s01/fishing/`,
+      ws_addr: `${origin.startsWith("https://") ? "wss" : "ws"}://${request.headers.host}/fishstar-proxy-ws/s01/fishing/ws`
+    }
+  };
+}
+
+function buildFishStarPlayer(session, posOverride = 0) {
+  const internalPlayer = getFishStarInternalPlayer(session);
+  const userId = getFishStarSessionUserId(session);
+  return {
+    userId,
+    user_id: userId,
+    userID: userId,
+    coin: internalPlayer.score,
+    nickName: internalPlayer.nickname || (session && session.payload && session.payload.nickname) || `FishStar ${userId}`,
+    avatar: (session && session.payload && session.payload.avatar) || "",
+    pos: posOverride,
+    betIndex: 0,
+    fireCount: 0,
+    level: 1,
+    exp: 0,
+    maxExp: 100
+  };
+}
+
+const fishStarRooms = new Map();
+
+function getFishStarInternalPlayer(session) {
+  return resolvePlayerFromAuthInput(authInputFromEmbedSession(session));
+}
+
+function roundFishStarCoin(value) {
+  return Math.round(Number(value) * 10) / 10;
+}
+
+function saveFishStarInternalPlayer(player) {
+  db.getDb().prepare(
+    `UPDATE players SET
+       score = ?, total_bet = ?, total_won = ?, spin_count = ?, updated_at = datetime('now')
+     WHERE id = ?`
+  ).run(player.score, player.totalBet, player.totalWon, player.spinCount, player.id);
+}
+
+function recordFishStarTransaction(player, type, amount, balanceBefore, balanceAfter, roundId, meta = {}) {
+  if (!player.merchantId || !player.externalUserId || amount <= 0) return;
+  merchantService.recordTransaction({
+    txnId: `${roundId}-${type}`,
+    merchantId: player.merchantId,
+    externalUserId: player.externalUserId,
+    gameId: player.gameId || "fishstar",
+    playerId: player.id,
+    type,
+    amount,
+    balanceBefore,
+    balanceAfter,
+    roundId,
+    meta
+  });
+}
+
+function getFishStarShotStore(socket) {
+  if (!socket.fishStarShots) socket.fishStarShots = new Map();
+  const now = Date.now();
+  for (const [token, shot] of socket.fishStarShots) {
+    if (!shot || now - Number(shot.createdAt || 0) > 10000) socket.fishStarShots.delete(token);
+  }
+  return socket.fishStarShots;
+}
+
+function createFishStarFireToken(socket) {
+  socket.fishStarFireSeq = (socket.fishStarFireSeq || 0) + 1;
+  return `fs_${Date.now()}_${socket.fishStarFireSeq}`;
+}
+
+function normalizeFishStarBet(value) {
+  const bet = Number(value);
+  return Number.isFinite(bet) && bet > 0 ? bet : 1;
+}
+
+function clampFishStarChance(value, fallback = 0) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  return Math.min(1, Math.max(0, number));
+}
+
+const FISHSTAR_DEFAULT_RTP_TARGET = 0.98;
+const FISHSTAR_MIN_RTP_TARGET = 0.5;
+const FISHSTAR_MAX_RTP_TARGET = 1.5;
+const FISHSTAR_FISH_RULES = Object.freeze({
+  1: Object.freeze({ multiplier: 2 }),
+  2: Object.freeze({ multiplier: 3 }),
+  3: Object.freeze({ multiplier: 4 }),
+  4: Object.freeze({ multiplier: 5 }),
+  5: Object.freeze({ multiplier: 6 })
+});
+
+function clampFishStarRtpTarget(value, fallback = FISHSTAR_DEFAULT_RTP_TARGET) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  return Math.min(FISHSTAR_MAX_RTP_TARGET, Math.max(FISHSTAR_MIN_RTP_TARGET, number));
+}
+
+function getFishStarFishRule(fish) {
+  const fishType = Number(fish && fish.ft);
+  return FISHSTAR_FISH_RULES[fishType] || FISHSTAR_FISH_RULES[1];
+}
+
+function getFishStarKillChance(player, fish, strategy = null) {
+  const effectiveStrategy = strategy || getEffectiveStrategy(player.merchantId, player.gameId || "fishstar");
+  const targetRtp = clampFishStarRtpTarget(effectiveStrategy && effectiveStrategy.rtpTarget);
+  const rule = getFishStarFishRule(fish);
+  return clampFishStarChance(targetRtp / rule.multiplier, 0);
+}
+
+function shouldFishStarKill(player, fish, strategy = null) {
+  return Math.random() < getFishStarKillChance(player, fish, strategy);
+}
+
+function buildFishStarNoKillData(requestData, player, fireToken, fishId, coin) {
+  return {
+    ...requestData,
+    userId: player.userId,
+    userID: player.userId,
+    fishId,
+    bonus: 0,
+    bigReward: false,
+    token: fireToken,
+    fireToken,
+    newCoin: coin,
+    coin,
+    curBank: 0,
+    batchHitFish: { items: [] }
+  };
+}
+
+function buildFishStarEnterRoomData(player, room) {
+  return {
+    user_id: player.userId,
+    players: Array.from(room.players.values()),
+    fishs: Array.from(room.fishs.values()),
+    paoBei: [1, 10, 100, 1000],
+    allProp: [],
+    itemsCfg: [],
+    curBank: 0,
+    piggyBank: 0,
+    piggyBankStatus: 0,
+    fishType: [1, 2, 3, 4, 5],
+    showCdkeyBtn: false,
+    showRankList: false,
+    showLevel: false,
+    showPiggyBank: false,
+    showNewRecord: false
+  };
+}
+
+const FISHSTAR_FISH_LINES = [1001, 1002, 1003, 1004, 1005, 1006, 1007, 1008, 1009, 1010, 1011, 1012];
+let fishStarFishId = 100000;
+
+function buildFishStarFishBatch(count = 8) {
+  return Array.from({ length: count }, (_, index) => ({
+    id: fishStarFishId++,
+    ft: (index % 5) + 1,
+    line: FISHSTAR_FISH_LINES[index % FISHSTAR_FISH_LINES.length],
+    ageTime: 0,
+    delayed: index * 350,
+    buffer: 0
+  }));
+}
+
+function getFishStarRoomId(requestData, session) {
+  const payload = session && session.payload ? session.payload : {};
+  return String((requestData && requestData.roomId) || payload.roomId || "default").trim() || "default";
+}
+
+function addFishStarFishsToRoom(room, fishs) {
+  for (const fish of fishs) room.fishs.set(String(fish.id), fish);
+}
+
+function sendFishStarRoomMessage(room, msgId, data = {}, excludeSocket = null) {
+  for (const client of room.sockets) {
+    if (client !== excludeSocket && !client.destroyed) sendWsText(client, buildFishStarMessage(msgId, data));
+  }
+}
+
+function sendFishStarRoomMessageExcept(room, msgId, data = {}, excludedSockets = new Set()) {
+  for (const client of room.sockets) {
+    if (!excludedSockets.has(client) && !client.destroyed) sendWsText(client, buildFishStarMessage(msgId, data));
+  }
+}
+
+function spawnFishStarRoomFishs(room, count = 8) {
+  const fishs = buildFishStarFishBatch(count);
+  addFishStarFishsToRoom(room, fishs);
+  sendFishStarRoomMessage(room, 1004, { fishs });
+}
+
+function createFishStarRoom(roomId) {
+  const room = {
+    id: roomId,
+    sockets: new Set(),
+    players: new Map(),
+    fishs: new Map(),
+    deadFishIds: new Set(),
+    timer: null
+  };
+  addFishStarFishsToRoom(room, buildFishStarFishBatch(18));
+  room.timer = setInterval(() => spawnFishStarRoomFishs(room, 8), 7000);
+  fishStarRooms.set(roomId, room);
+  return room;
+}
+
+function getFishStarRoom(roomId) {
+  return fishStarRooms.get(roomId) || createFishStarRoom(roomId);
+}
+
+function getFishStarRoomSeat(room, userId) {
+  const existingPlayer = room.players.get(userId);
+  if (existingPlayer && Number.isInteger(existingPlayer.pos)) return existingPlayer.pos;
+  const used = new Set(Array.from(room.players.values()).map((player) => player.pos));
+  for (let pos = 0; pos < 4; pos += 1) {
+    if (!used.has(pos)) return pos;
+  }
+  return 0;
+}
+
+function findFishStarRoomSocketByShot(room, userId, fireToken) {
+  for (const client of room.sockets) {
+    if (client.fishStarState && client.fishStarState.userId === userId && fireToken && getFishStarShotStore(client).has(fireToken)) {
+      return client;
+    }
+  }
+  return null;
+}
+
+function leaveFishStarRoom(socket) {
+  const state = socket.fishStarState;
+  if (!state || !state.roomId) return;
+  const room = fishStarRooms.get(state.roomId);
+  socket.fishStarState = null;
+  if (!room) return;
+  room.sockets.delete(socket);
+  if (socket.fishStarShots) socket.fishStarShots.clear();
+
+  const hasSameUserSocket = Array.from(room.sockets).some((client) => client.fishStarState && client.fishStarState.userId === state.userId);
+  if (!hasSameUserSocket) {
+    room.players.delete(state.userId);
+    sendFishStarRoomMessage(room, 1014, { userId: state.userId, userID: state.userId, pos: state.pos });
+  }
+
+  if (room.sockets.size === 0) {
+    if (room.timer) clearInterval(room.timer);
+    fishStarRooms.delete(state.roomId);
+  }
+}
+
+function buildFishStarMessage(msgId, data = {}) {
+  return JSON.stringify({ msgId, errCode: 0, data });
+}
+
+function sendWsText(socket, text) {
+  const payload = Buffer.from(text);
+  let header;
+  if (payload.length < 126) {
+    header = Buffer.from([0x81, payload.length]);
+  } else if (payload.length < 65536) {
+    header = Buffer.alloc(4);
+    header[0] = 0x81;
+    header[1] = 126;
+    header.writeUInt16BE(payload.length, 2);
+  } else {
+    header = Buffer.alloc(10);
+    header[0] = 0x81;
+    header[1] = 127;
+    header.writeBigUInt64BE(BigInt(payload.length), 2);
+  }
+  socket.write(Buffer.concat([header, payload]));
+}
+
+function decodeWsFrames(buffer) {
+  const messages = [];
+  let offset = 0;
+  while (offset + 2 <= buffer.length) {
+    const first = buffer[offset];
+    const second = buffer[offset + 1];
+    const opcode = first & 0x0f;
+    const masked = (second & 0x80) !== 0;
+    let length = second & 0x7f;
+    let cursor = offset + 2;
+    if (length === 126) {
+      if (cursor + 2 > buffer.length) break;
+      length = buffer.readUInt16BE(cursor);
+      cursor += 2;
+    } else if (length === 127) {
+      if (cursor + 8 > buffer.length) break;
+      length = Number(buffer.readBigUInt64BE(cursor));
+      cursor += 8;
+    }
+    let mask = null;
+    if (masked) {
+      if (cursor + 4 > buffer.length) break;
+      mask = buffer.subarray(cursor, cursor + 4);
+      cursor += 4;
+    }
+    if (cursor + length > buffer.length) break;
+    const payload = Buffer.from(buffer.subarray(cursor, cursor + length));
+    if (mask) {
+      for (let index = 0; index < payload.length; index += 1) payload[index] ^= mask[index % 4];
+    }
+    if (opcode === 1) messages.push(payload.toString("utf8"));
+    offset = cursor + length;
+  }
+  return messages;
+}
+
+function handleFishStarWsMessage(socket, session, raw) {
+  let message;
+  try {
+    message = JSON.parse(raw);
+  } catch (error) {
+    return;
+  }
+  const msgId = Number(message.msgId);
+  if (msgId === 1000) {
+    sendWsText(socket, buildFishStarMessage(1000, {}));
+    return;
+  }
+  if (msgId === 1001) {
+    const player = buildFishStarPlayer(session, socket.fishStarState ? socket.fishStarState.pos : 0);
+    sendWsText(socket, buildFishStarMessage(1001, { coin: player.coin, currency_icon: "", country_code: "" }));
+    return;
+  }
+  if (msgId === 1002) {
+    const requestData = message.data || {};
+    leaveFishStarRoom(socket);
+    const roomId = getFishStarRoomId(requestData, session);
+    const room = getFishStarRoom(roomId);
+    const userId = getFishStarSessionUserId(session);
+    const pos = getFishStarRoomSeat(room, userId);
+    const player = buildFishStarPlayer(session, pos);
+    socket.fishStarState = { roomId, userId, pos };
+    room.sockets.add(socket);
+    room.players.set(userId, player);
+    sendWsText(socket, buildFishStarMessage(1002, buildFishStarEnterRoomData(player, room)));
+    sendFishStarRoomMessage(room, 1013, player, socket);
+    return;
+  }
+  if (msgId === 1005) {
+    const requestData = message.data || {};
+    const state = socket.fishStarState;
+    const room = state && fishStarRooms.get(state.roomId);
+    if (!state || !room) {
+      sendWsText(socket, buildFishStarMessage(1005, { ...requestData, newCoin: 0 }));
+      return;
+    }
+    const internalPlayer = getFishStarInternalPlayer(session);
+    const player = buildFishStarPlayer(session, state.pos);
+    const fireToken = requestData.fireToken || requestData.token || createFishStarFireToken(socket);
+    const bet = normalizeFishStarBet(requestData.fire);
+    const balanceBefore = Number(internalPlayer.score) || 0;
+    const chargedBet = Math.min(bet, Math.max(0, balanceBefore));
+    internalPlayer.score = roundFishStarCoin(balanceBefore - chargedBet);
+    internalPlayer.totalBet = roundFishStarCoin((Number(internalPlayer.totalBet) || 0) + chargedBet);
+    internalPlayer.spinCount = (Number(internalPlayer.spinCount) || 0) + 1;
+    saveFishStarInternalPlayer(internalPlayer);
+    if (chargedBet > 0) getFishStarShotStore(socket).set(fireToken, { bet: chargedBet, createdAt: Date.now() });
+    recordFishStarTransaction(internalPlayer, "bet", chargedBet, balanceBefore, internalPlayer.score, fireToken, { source: "fishstar-fire" });
+    room.players.set(state.userId, { ...player, coin: internalPlayer.score });
+    sendWsText(socket, buildFishStarMessage(1005, {
+      ...requestData,
+      userID: player.userId,
+      userId: player.userId,
+      fireToken,
+      token: fireToken,
+      newCoin: internalPlayer.score
+    }));
+    sendFishStarRoomMessage(room, 1015, {
+      ...requestData,
+      userId: player.userId,
+      userID: player.userId,
+      fireToken,
+      token: fireToken,
+      newCoin: internalPlayer.score,
+      fire: requestData.fire,
+      angle: requestData.angle
+    }, socket);
+    return;
+  }
+  if (msgId === 1006 || msgId === 1016) {
+    const requestData = message.data || {};
+    const reporterState = socket.fishStarState;
+    const room = reporterState && fishStarRooms.get(reporterState.roomId);
+    const fireToken = requestData.fireToken || requestData.token || "";
+    const reporterUserId = reporterState && reporterState.userId;
+    const claimedUserId = String(requestData.userId || requestData.userID || reporterUserId || getFishStarSessionUserId(session));
+    if (!reporterUserId || claimedUserId !== reporterUserId) {
+      const internalPlayer = getFishStarInternalPlayer(session);
+      const player = buildFishStarPlayer(session, reporterState ? reporterState.pos : 0);
+      const fishId = requestData.fishId || requestData.id || 0;
+      sendWsText(socket, buildFishStarMessage(msgId, buildFishStarNoKillData(requestData, player, fireToken, fishId, internalPlayer.score)));
+      return;
+    }
+    const ownerSocket = room ? findFishStarRoomSocketByShot(room, claimedUserId, fireToken) || (reporterState && reporterState.userId === claimedUserId ? socket : null) : socket;
+    if (ownerSocket !== socket) {
+      const internalPlayer = getFishStarInternalPlayer(session);
+      const player = buildFishStarPlayer(session, reporterState ? reporterState.pos : 0);
+      const fishId = requestData.fishId || requestData.id || 0;
+      sendWsText(socket, buildFishStarMessage(msgId, buildFishStarNoKillData(requestData, player, fireToken, fishId, internalPlayer.score)));
+      return;
+    }
+    const ownerSession = ownerSocket === socket ? session : ownerSocket && ownerSocket.fishStarSession;
+    const ownerState = ownerSocket && ownerSocket.fishStarState;
+    const internalPlayer = ownerSession ? getFishStarInternalPlayer(ownerSession) : getFishStarInternalPlayer(session);
+    const player = buildFishStarPlayer(ownerSession || session, ownerState ? ownerState.pos : 0);
+    const shotStore = ownerSocket ? getFishStarShotStore(ownerSocket) : new Map();
+    const shot = fireToken ? shotStore.get(fireToken) : null;
+    if (fireToken && shot) shotStore.delete(fireToken);
+    const balanceBefore = Number(internalPlayer.score) || 0;
+    const fishId = requestData.fishId || requestData.id || 0;
+    const fishKey = String(fishId);
+    const fish = room && fishId ? room.fishs.get(fishKey) : null;
+    const fishLive = Boolean(fish && !room.deadFishIds.has(fishKey));
+    if (!shot || !(shot.bet > 0) || !fishLive) {
+      sendWsText(socket, buildFishStarMessage(msgId, buildFishStarNoKillData(requestData, player, fireToken, fishId, internalPlayer.score)));
+      return;
+    }
+    const strategy = getEffectiveStrategy(internalPlayer.merchantId, internalPlayer.gameId || "fishstar");
+    if (!shouldFishStarKill(internalPlayer, fish, strategy)) {
+      sendWsText(socket, buildFishStarMessage(msgId, buildFishStarNoKillData(requestData, player, fireToken, fishId, internalPlayer.score)));
+      return;
+    }
+    room.deadFishIds.add(fishKey);
+    room.fishs.delete(fishKey);
+    const fishRule = getFishStarFishRule(fish);
+    const bonus = Math.max(1, roundFishStarCoin(shot.bet * fishRule.multiplier));
+    const bigWinMultiplier = Number(strategy && strategy.bigWinMultiplier) || 20;
+    const bigReward = bonus >= shot.bet * bigWinMultiplier;
+    internalPlayer.score = roundFishStarCoin(balanceBefore + bonus);
+    internalPlayer.totalWon = roundFishStarCoin((Number(internalPlayer.totalWon) || 0) + bonus);
+    saveFishStarInternalPlayer(internalPlayer);
+    recordFishStarTransaction(internalPlayer, "win", bonus, balanceBefore, internalPlayer.score, fireToken, { source: "fishstar-hit", fishId });
+    if (room && ownerState) room.players.set(ownerState.userId, { ...player, coin: internalPlayer.score });
+    const hitData = {
+      ...requestData,
+      userId: player.userId,
+      userID: player.userId,
+      fishId,
+      bonus,
+      bigReward,
+      token: fireToken,
+      fireToken,
+      newCoin: internalPlayer.score,
+      coin: internalPlayer.score,
+      curBank: 0,
+      batchHitFish: { items: [{ fishId, bonus, bigReward }] }
+    };
+    const directSockets = new Set();
+    if (ownerSocket && !ownerSocket.destroyed) {
+      directSockets.add(ownerSocket);
+      sendWsText(ownerSocket, buildFishStarMessage(ownerSocket === socket ? msgId : 1006, hitData));
+    }
+    if (ownerSocket !== socket) {
+      directSockets.add(socket);
+      sendWsText(socket, buildFishStarMessage(msgId, hitData));
+    }
+    sendFishStarRoomMessageExcept(room, 1016, hitData, directSockets);
+    sendFishStarRoomMessage(room, 1003, { ids: [fishId], fishId, id: fishId }, null);
+    return;
+  }
+  sendWsText(socket, buildFishStarMessage(msgId || 0, {}));
+}
+
 function proxyFishStarHttp(request, response, url) {
-  if (!requireFishStarLaunchSession(request, response)) return;
+  const session = requireFishStarLaunchSession(request, response);
+  if (!session) return;
   if (request.method !== "GET" && request.method !== "POST") {
     sendText(response, 405, "Method not allowed");
     return;
@@ -575,40 +1106,11 @@ function proxyFishStarHttp(request, response, url) {
     return;
   }
 
-  const upstreamUrl = new URL(`${FISHSTAR_UPSTREAM_ORIGIN}${upstreamPath}${url.search}`);
-  const headers = {
-    "user-agent": request.headers["user-agent"] || "",
-    "accept": request.headers.accept || "*/*",
-    "accept-language": request.headers["accept-language"] || "en-US,en;q=0.9"
-  };
-  if (request.headers["content-type"]) headers["content-type"] = request.headers["content-type"];
-
-  const upstreamRequest = https.request(upstreamUrl, { method: request.method, headers }, (upstreamResponse) => {
-    const chunks = [];
-    upstreamResponse.on("data", (chunk) => chunks.push(chunk));
-    upstreamResponse.on("end", () => {
-      let body = Buffer.concat(chunks);
-      const contentType = upstreamResponse.headers["content-type"] || "application/octet-stream";
-      if (upstreamPath === "/game_route/get_addr" && contentType.includes("application/json")) {
-        try {
-          const rewritten = rewriteFishStarRouteResponse(JSON.parse(body.toString("utf8")), request);
-          body = Buffer.from(JSON.stringify(rewritten));
-        } catch (error) {
-          // Keep upstream body if it is not valid JSON.
-        }
-      }
-      response.writeHead(upstreamResponse.statusCode || 502, {
-        "Content-Type": contentType,
-        "Cache-Control": "no-store",
-        ...buildCorsHeaders(response)
-      });
-      response.end(body);
-    });
-  });
-  upstreamRequest.on("error", (error) => {
-    if (!response.writableEnded) sendJson(response, 502, { ok: false, error: error.message });
-  });
-  request.pipe(upstreamRequest);
+  if (upstreamPath === "/game_route/get_addr") {
+    sendJson(response, 200, buildFishStarRouteResponse(request));
+    return;
+  }
+  sendJson(response, 200, { errCode: 0, code: 0, data: { user: buildFishStarPlayer(session) } });
 }
 
 
@@ -1140,6 +1642,88 @@ const server = http.createServer(async (request, response) => {
 
     // 单商户的活跃玩家列表
     {
+      const creditMatch = url.pathname.match(/^\/api\/admin\/merchants\/([a-z0-9_-]+)\/players\/credit$/);
+      if (creditMatch && request.method === "POST") {
+        const mId = creditMatch[1];
+        const merchant = merchantService.getMerchant(mId);
+        if (!merchant) {
+          sendJson(response, 404, { ok: false, error: `商户 ${mId} 不存在` });
+          return;
+        }
+        const body = await readBody(request);
+        const payload = body ? JSON.parse(body) : {};
+        const externalUserId = String(payload.externalUserId ?? payload.userId ?? "").trim();
+        const gameId = String(payload.gameId || "").trim();
+        const amount = Number(payload.amount);
+        const note = String(payload.note || "").trim().slice(0, 200);
+        if (!externalUserId) {
+          sendJson(response, 400, { ok: false, error: "externalUserId required" });
+          return;
+        }
+        if (!Number.isFinite(amount) || amount <= 0) {
+          sendJson(response, 400, { ok: false, error: "amount must be a finite number greater than 0" });
+          return;
+        }
+        if (gameId && !gameService.isMerchantGameAllowed(mId, gameId)) {
+          sendJson(response, 400, { ok: false, error: `商户 ${mId} 没有启用游戏 ${gameId}` });
+          return;
+        }
+
+        const dbInst = db.getDb();
+        const found = findAdminCreditPlayer(dbInst, mId, externalUserId, gameId);
+        if (Array.isArray(found)) {
+          if (!found.length) {
+            sendJson(response, 404, { ok: false, error: "player not found" });
+            return;
+          }
+          if (found.length > 1) {
+            sendJson(response, 400, { ok: false, error: "multiple players found; gameId required" });
+            return;
+          }
+        }
+        const player = Array.isArray(found) ? found[0] : found;
+        if (!player) {
+          sendJson(response, 404, { ok: false, error: "player not found" });
+          return;
+        }
+
+        const session = getAdminSession(request);
+        const actorIp = getClientIp(request);
+        const result = dbInst.transaction(() => {
+          const freshPlayer = dbInst.prepare(
+            `SELECT id, merchant_id, external_user_id, game_id, score
+               FROM players WHERE id = ?`
+          ).get(player.id);
+          const balanceBefore = Number(freshPlayer.score) || 0;
+          const balanceAfter = balanceBefore + amount;
+          dbInst.prepare(
+            `UPDATE players SET score = ?, updated_at = datetime('now') WHERE id = ?`
+          ).run(balanceAfter, freshPlayer.id);
+          const txnId = `admin-credit-${mId}-${freshPlayer.id}-${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
+          merchantService.recordTransaction({
+            txnId,
+            merchantId: mId,
+            externalUserId,
+            gameId: freshPlayer.game_id,
+            playerId: freshPlayer.id,
+            type: "admin_credit",
+            amount,
+            balanceBefore,
+            balanceAfter,
+            roundId: null,
+            meta: {
+              note,
+              actorUser: session ? session.username : null,
+              actorIp,
+              source: "admin-player-credit"
+            }
+          });
+          return { txnId, playerId: freshPlayer.id, gameId: freshPlayer.game_id, balanceBefore, balanceAfter };
+        })();
+        sendJson(response, 200, { ok: true, externalUserId, amount, note, ...result });
+        return;
+      }
+
       const m = url.pathname.match(/^\/api\/admin\/merchants\/([a-z0-9_-]+)\/players$/);
       if (m && request.method === "GET") {
         const mId = m[1];
@@ -1363,6 +1947,7 @@ const server = http.createServer(async (request, response) => {
             nickname: payload.nickname || null,
             avatar: payload.avatar || null,
             lang: payload.lang || "en",
+            fishstarUserId: payload.fishstarUserId ?? payload.userId ?? null,
             initialBalance: Number(payload.initialBalance) || null
           }
         });
@@ -1509,7 +2094,11 @@ const server = http.createServer(async (request, response) => {
           payload: {
             nickname: `QA ${tc.code.slice(-6)}`,
             lang: "en",
-            fromTestCode: true
+            fromTestCode: true,
+            initialBalance: tc.initialBalance,
+            displayMode: tc.displayMode || url.searchParams.get("displayMode") || "half",
+            fishstarUserId: tc.gameId === "fishstar" ? tc.externalUserId : null,
+            userId: tc.gameId === "fishstar" ? tc.externalUserId : null
           }
         });
         markTestCodeConsumed(code);
@@ -1549,11 +2138,9 @@ const server = http.createServer(async (request, response) => {
         gameId: consumed.gameId,
         payload: consumed.payload
       }, request);
-      const lang = encodeURIComponent(consumed.payload.lang || "en");
-      const sep = assetUrl.includes("?") ? "&" : "?";
       response.writeHead(302, {
         "Set-Cookie": sessionCookie,
-        "Location": `${assetUrl}${sep}lang=${lang}&embed=1&backurl=openurl%3A%2F%2Fclosegame`
+        "Location": buildEmbedLocation(assetUrl, consumed)
       });
       response.end();
       return;
@@ -1587,6 +2174,10 @@ const server = http.createServer(async (request, response) => {
         response.end();
         return;
       }
+      if (allowedGameId === "fishstar" && requestedGameDir === "fishstar" && !enforceFishStarQueryUserId(url, session)) {
+        sendText(response, 403, "FishStar userId does not match launch session");
+        return;
+      }
       // cookie ok,从 GAMES_ROOT 取
       serveGameAsset(request, response);
       return;
@@ -1605,7 +2196,8 @@ server.on("upgrade", (request, socket, head) => {
     socket.destroy();
     return;
   }
-  if (!requireFishStarLaunchSession(request, null)) {
+  const session = requireFishStarLaunchSession(request, null);
+  if (!session) {
     socket.write("HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n");
     socket.destroy();
     return;
@@ -1617,45 +2209,22 @@ server.on("upgrade", (request, socket, head) => {
     return;
   }
 
-  const upstreamRequest = https.request({
-    hostname: FISHSTAR_UPSTREAM_HOST,
-    port: 443,
-    path: `${upstreamPath}${url.search}`,
-    method: "GET",
-    headers: {
-      "Host": FISHSTAR_UPSTREAM_HOST,
-      "Upgrade": "websocket",
-      "Connection": "Upgrade",
-      "Sec-WebSocket-Key": request.headers["sec-websocket-key"],
-      "Sec-WebSocket-Version": request.headers["sec-websocket-version"] || "13",
-      "Sec-WebSocket-Extensions": request.headers["sec-websocket-extensions"] || undefined,
-      "Origin": getPublicOrigin(request),
-      "User-Agent": request.headers["user-agent"] || "Mozilla/5.0"
-    }
+  const key = request.headers["sec-websocket-key"];
+  const accept = crypto.createHash("sha1").update(`${key}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`).digest("base64");
+  socket.write([
+    "HTTP/1.1 101 Switching Protocols",
+    "Upgrade: websocket",
+    "Connection: Upgrade",
+    `Sec-WebSocket-Accept: ${accept}`,
+    "",
+    ""
+  ].join("\r\n"));
+  socket.fishStarSession = session;
+  socket.on("data", (chunk) => {
+    for (const raw of decodeWsFrames(chunk)) handleFishStarWsMessage(socket, session, raw);
   });
-
-  upstreamRequest.on("upgrade", (upstreamResponse, upstreamSocket, upstreamHead) => {
-    socket.write(
-      `HTTP/1.1 ${upstreamResponse.statusCode} ${upstreamResponse.statusMessage}\r\n` +
-      Object.entries(upstreamResponse.headers)
-        .map(([key, value]) => `${key}: ${Array.isArray(value) ? value.join(", ") : value}`)
-        .join("\r\n") +
-      "\r\n\r\n"
-    );
-    if (upstreamHead && upstreamHead.length) socket.write(upstreamHead);
-    if (head && head.length) upstreamSocket.write(head);
-    upstreamSocket.pipe(socket);
-    socket.pipe(upstreamSocket);
-  });
-  upstreamRequest.on("response", (upstreamResponse) => {
-    socket.write(`HTTP/1.1 ${upstreamResponse.statusCode || 502} ${upstreamResponse.statusMessage || "Bad Gateway"}\r\nConnection: close\r\n\r\n`);
-    socket.destroy();
-  });
-  upstreamRequest.on("error", () => {
-    socket.write("HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\n\r\n");
-    socket.destroy();
-  });
-  upstreamRequest.end();
+  socket.on("close", () => leaveFishStarRoom(socket));
+  socket.on("error", () => { leaveFishStarRoom(socket); socket.destroy(); });
 });
 
 server.listen(PORT, () => {

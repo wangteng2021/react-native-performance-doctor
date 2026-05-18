@@ -72,6 +72,8 @@ function initSchema(database) {
       code       TEXT UNIQUE NOT NULL,
       prefix     TEXT NOT NULL,
       scenario   TEXT NOT NULL,
+      display_mode TEXT,
+      initial_balance REAL NOT NULL DEFAULT 100000,
       note       TEXT NOT NULL DEFAULT '',
       play_url   TEXT NOT NULL,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -215,6 +217,8 @@ function initSchema(database) {
   upgradeColumn("test_codes", "external_user_id", "external_user_id TEXT");
   upgradeColumn("test_codes", "consumed_at", "consumed_at TEXT");
   upgradeColumn("test_codes", "game_id", "game_id TEXT");
+  upgradeColumn("test_codes", "display_mode", "display_mode TEXT");
+  upgradeColumn("test_codes", "initial_balance", "initial_balance REAL NOT NULL DEFAULT 100000");
   // 流水 / 历史 / launch token 加 game_id
   upgradeColumn("transactions", "game_id", "game_id TEXT");
   upgradeColumn("spin_history", "game_id", "game_id TEXT");
@@ -236,6 +240,7 @@ function initSchema(database) {
   const PINATA_ASSET_URL = "/pinata-fiesta-wins/index.html";
   const FISHSTAR_GAME_ID = "fishstar";
   const FISHSTAR_ASSET_URL = "/fishstar/index.html";
+  const FISHSTAR_DEFAULT_STRATEGY = JSON.stringify({ rtpTarget: 0.98 });
   database.prepare(`UPDATE players SET game_id = ? WHERE game_id IS NULL AND merchant_id IS NOT NULL`).run(PINATA_GAME_ID);
   database.prepare(`UPDATE transactions SET game_id = ? WHERE game_id IS NULL`).run(PINATA_GAME_ID);
   database.prepare(`UPDATE spin_history SET game_id = ? WHERE game_id IS NULL`).run(PINATA_GAME_ID);
@@ -264,17 +269,23 @@ function initSchema(database) {
     ).run(PINATA_ASSET_URL, PINATA_GAME_ID, "/pinatawins/index.html");
   }
 
-  const existingFishStarGame = database.prepare(`SELECT status, asset_url FROM games WHERE game_id = ?`).get(FISHSTAR_GAME_ID);
+  const existingFishStarGame = database.prepare(`SELECT status, asset_url, default_strategy FROM games WHERE game_id = ?`).get(FISHSTAR_GAME_ID);
   if (!existingFishStarGame) {
     database.prepare(
-      `INSERT INTO games (game_id, name, type, status, asset_url)
-       VALUES (?, ?, ?, ?, ?)`
-    ).run(FISHSTAR_GAME_ID, "FishStar", "fishing", "active", FISHSTAR_ASSET_URL);
+      `INSERT INTO games (game_id, name, type, status, asset_url, default_strategy)
+       VALUES (?, ?, ?, ?, ?, ?)`
+    ).run(FISHSTAR_GAME_ID, "FishStar", "fishing", "active", FISHSTAR_ASSET_URL, FISHSTAR_DEFAULT_STRATEGY);
   } else if (existingFishStarGame.asset_url !== FISHSTAR_ASSET_URL) {
     database.prepare(
       `UPDATE games SET asset_url = ?
        WHERE game_id = ? AND asset_url <> ?`
     ).run(FISHSTAR_ASSET_URL, FISHSTAR_GAME_ID, FISHSTAR_ASSET_URL);
+  }
+  if (existingFishStarGame && !existingFishStarGame.default_strategy) {
+    database.prepare(
+      `UPDATE games SET default_strategy = ?, updated_at = datetime('now')
+       WHERE game_id = ? AND (default_strategy IS NULL OR default_strategy = '')`
+    ).run(FISHSTAR_DEFAULT_STRATEGY, FISHSTAR_GAME_ID);
   }
 
   // 把现有 merchants.strategy_config 迁到 merchant_game_strategies(关联到 pinata-fiesta-wins)
