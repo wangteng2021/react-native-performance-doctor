@@ -714,8 +714,24 @@ const FISHSTAR_FISH_RULES = Object.freeze({
   2: Object.freeze({ multiplier: 3 }),
   3: Object.freeze({ multiplier: 4 }),
   4: Object.freeze({ multiplier: 5 }),
-  5: Object.freeze({ multiplier: 6 })
+  5: Object.freeze({ multiplier: 6 }),
+  6: Object.freeze({ multiplier: 7 }),
+  7: Object.freeze({ multiplier: 8 }),
+  8: Object.freeze({ multiplier: 9 }),
+  9: Object.freeze({ multiplier: 10 }),
+  10: Object.freeze({ multiplier: 11 }),
+  11: Object.freeze({ multiplier: 13 }),
+  12: Object.freeze({ multiplier: 15 }),
+  13: Object.freeze({ multiplier: 20 }),
+  14: Object.freeze({ multiplier: 30 }),
+  15: Object.freeze({ multiplier: 40 }),
+  18: Object.freeze({ multiplier: 80 }),
+  19: Object.freeze({ multiplier: 1000 }),
+  20: Object.freeze({ multiplier: 1000 }),
+  21: Object.freeze({ multiplier: 1000 }),
+  22: Object.freeze({ multiplier: 100 })
 });
+const FISHSTAR_FISH_TYPES = Object.freeze(Object.keys(FISHSTAR_FISH_RULES).map(Number).sort((a, b) => a - b));
 
 function clampFishStarRtpTarget(value, fallback = FISHSTAR_DEFAULT_RTP_TARGET) {
   const number = Number(value);
@@ -725,13 +741,14 @@ function clampFishStarRtpTarget(value, fallback = FISHSTAR_DEFAULT_RTP_TARGET) {
 
 function getFishStarFishRule(fish) {
   const fishType = Number(fish && fish.ft);
-  return FISHSTAR_FISH_RULES[fishType] || FISHSTAR_FISH_RULES[1];
+  return FISHSTAR_FISH_RULES[fishType] || null;
 }
 
 function getFishStarKillChance(player, fish, strategy = null) {
   const effectiveStrategy = strategy || getEffectiveStrategy(player.merchantId, player.gameId || "fishstar");
   const targetRtp = clampFishStarRtpTarget(effectiveStrategy && effectiveStrategy.rtpTarget);
   const rule = getFishStarFishRule(fish);
+  if (!rule) return 0;
   return clampFishStarChance(targetRtp / rule.multiplier, 0);
 }
 
@@ -767,7 +784,7 @@ function buildFishStarEnterRoomData(player, room) {
     curBank: 0,
     piggyBank: 0,
     piggyBankStatus: 0,
-    fishType: [1, 2, 3, 4, 5],
+    fishType: FISHSTAR_FISH_TYPES,
     showCdkeyBtn: false,
     showRankList: false,
     showLevel: false,
@@ -778,11 +795,18 @@ function buildFishStarEnterRoomData(player, room) {
 
 const FISHSTAR_FISH_LINES = [1001, 1002, 1003, 1004, 1005, 1006, 1007, 1008, 1009, 1010, 1011, 1012];
 let fishStarFishId = 100000;
+let fishStarFishTypeIndex = 0;
+
+function getNextFishStarFishType() {
+  const fishType = FISHSTAR_FISH_TYPES[fishStarFishTypeIndex % FISHSTAR_FISH_TYPES.length];
+  fishStarFishTypeIndex += 1;
+  return fishType;
+}
 
 function buildFishStarFishBatch(count = 8) {
   return Array.from({ length: count }, (_, index) => ({
     id: fishStarFishId++,
-    ft: (index % 5) + 1,
+    ft: getNextFishStarFishType(),
     line: FISHSTAR_FISH_LINES[index % FISHSTAR_FISH_LINES.length],
     ageTime: 0,
     delayed: index * 350,
@@ -1047,13 +1071,13 @@ function handleFishStarWsMessage(socket, session, raw) {
       return;
     }
     const strategy = getEffectiveStrategy(internalPlayer.merchantId, internalPlayer.gameId || "fishstar");
-    if (!shouldFishStarKill(internalPlayer, fish, strategy)) {
+    const fishRule = getFishStarFishRule(fish);
+    if (!fishRule || !shouldFishStarKill(internalPlayer, fish, strategy)) {
       sendWsText(socket, buildFishStarMessage(msgId, buildFishStarNoKillData(requestData, player, fireToken, fishId, internalPlayer.score)));
       return;
     }
     room.deadFishIds.add(fishKey);
     room.fishs.delete(fishKey);
-    const fishRule = getFishStarFishRule(fish);
     const bonus = Math.max(1, roundFishStarCoin(shot.bet * fishRule.multiplier));
     const bigWinMultiplier = Number(strategy && strategy.bigWinMultiplier) || 20;
     const bigReward = bonus >= shot.bet * bigWinMultiplier;
