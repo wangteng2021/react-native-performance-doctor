@@ -814,9 +814,10 @@ function buildFishStarFishBatch(count = 8) {
   }));
 }
 
-function getFishStarRoomId(requestData, session) {
+function getRequestedFishStarRoomId(requestData, session) {
   const payload = session && session.payload ? session.payload : {};
-  return String((requestData && requestData.roomId) || payload.roomId || "default").trim() || "default";
+  const value = (requestData && requestData.roomId) || payload.roomId;
+  return value == null ? "" : String(value).trim();
 }
 
 function addFishStarFishsToRoom(room, fishs) {
@@ -860,6 +861,26 @@ function getFishStarRoom(roomId) {
   return fishStarRooms.get(roomId) || createFishStarRoom(roomId);
 }
 
+function hasFishStarRoomSeat(room, userId) {
+  if (!room) return true;
+  if (room.players.has(userId)) return true;
+  return room.players.size < 4;
+}
+
+function getAutoFishStarRoomId(userId) {
+  const baseRoomId = "default";
+  for (let index = 1; index < 1000; index += 1) {
+    const roomId = index === 1 ? baseRoomId : `${baseRoomId}-${index}`;
+    const room = fishStarRooms.get(roomId);
+    if (hasFishStarRoomSeat(room, userId)) return roomId;
+  }
+  return `${baseRoomId}-${Date.now()}`;
+}
+
+function resolveFishStarRoomId(requestData, session, userId) {
+  return getRequestedFishStarRoomId(requestData, session) || getAutoFishStarRoomId(userId);
+}
+
 function getFishStarRoomSeat(room, userId) {
   const existingPlayer = room.players.get(userId);
   if (existingPlayer && Number.isInteger(existingPlayer.pos)) return existingPlayer.pos;
@@ -867,7 +888,7 @@ function getFishStarRoomSeat(room, userId) {
   for (let pos = 0; pos < 4; pos += 1) {
     if (!used.has(pos)) return pos;
   }
-  return 0;
+  return -1;
 }
 
 function findFishStarRoomSocketByShot(room, userId, fireToken) {
@@ -979,10 +1000,14 @@ function handleFishStarWsMessage(socket, session, raw) {
   if (msgId === 1002) {
     const requestData = message.data || {};
     leaveFishStarRoom(socket);
-    const roomId = getFishStarRoomId(requestData, session);
-    const room = getFishStarRoom(roomId);
     const userId = getFishStarSessionUserId(session);
+    const roomId = resolveFishStarRoomId(requestData, session, userId);
+    const room = getFishStarRoom(roomId);
     const pos = getFishStarRoomSeat(room, userId);
+    if (pos < 0) {
+      sendWsText(socket, buildFishStarMessage(1002, { error: "room full", roomId }));
+      return;
+    }
     const player = buildFishStarPlayer(session, pos);
     socket.fishStarState = { roomId, userId, pos };
     room.sockets.add(socket);
