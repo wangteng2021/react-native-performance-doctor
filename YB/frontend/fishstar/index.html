@@ -31,6 +31,86 @@
         }
       })();
     </script>
+    <script>
+      (function () {
+        var loadedSent = false;
+
+        function postNative(name, payload) {
+          try {
+            var webkit = window.webkit;
+            var handlers = webkit && webkit.messageHandlers;
+            var handler = handlers && handlers[name];
+            if (handler && typeof handler.postMessage === "function") {
+              handler.postMessage(payload || {});
+              return true;
+            }
+          } catch (error) {
+            console.warn("FishStar native bridge failed:", name, error);
+          }
+          return false;
+        }
+
+        function basePayload(extra) {
+          var query = {};
+          var params = new URLSearchParams(window.location.search);
+          params.forEach(function (value, key) {
+            query[key] = value;
+          });
+          var payload = {
+            gameId: "fishstar",
+            href: window.location.href,
+            query: query,
+            ts: Date.now()
+          };
+          if (extra && typeof extra === "object") {
+            Object.keys(extra).forEach(function (key) {
+              payload[key] = extra[key];
+            });
+          }
+          return payload;
+        }
+
+        window.FishStarNativeBridge = {
+          post: function (name, payload) {
+            return postNative(name, basePayload(payload));
+          },
+          getConfig: function (payload) {
+            return postNative("getConfig", basePayload(payload));
+          },
+          destroy: function (payload) {
+            return postNative("destroy", basePayload(payload));
+          },
+          gameRecharge: function (payload) {
+            return postNative("gameRecharge", basePayload(payload));
+          },
+          gameLoaded: function (payload) {
+            if (loadedSent) return false;
+            loadedSent = true;
+            return postNative("gameLoaded", basePayload(payload));
+          },
+          onConfig: function (config) {
+            window.FishStarNativeConfig = config || {};
+          },
+          onBalanceUpdate: function (payload) {
+            window.FishStarNativeBalance = payload || {};
+            window.dispatchEvent(new CustomEvent("fishstar:nativeBalanceUpdate", { detail: window.FishStarNativeBalance }));
+          }
+        };
+
+        window.onFishStarConfig = window.FishStarNativeBridge.onConfig;
+        window.onBalanceUpdate = window.FishStarNativeBridge.onBalanceUpdate;
+        window.requestGameRecharge = function (payload) {
+          return window.FishStarNativeBridge.gameRecharge(payload);
+        };
+        window.closeFishStarGame = function (payload) {
+          return window.FishStarNativeBridge.destroy(payload);
+        };
+        window.addEventListener("load", function () {
+          window.FishStarNativeBridge.gameLoaded({ phase: "window.load" });
+          window.FishStarNativeBridge.getConfig({ phase: "window.load" });
+        });
+      })();
+    </script>
     <meta charset="utf-8">
 
     <title>Fishing Star</title>
@@ -109,9 +189,13 @@
 
         loadScript(debug ? "cocos2d-js.js" : "cocos2d-js-min.fecee.js", function () { 
             if (CC_PHYSICS_BUILTIN || CC_PHYSICS_CANNON) {
-                loadScript(debug ? 'physics.js' : 'physics-min.js', window.boot);
+                loadScript(debug ? 'physics.js' : 'physics-min.js', function () {
+                    window.boot();
+                    window.FishStarNativeBridge && window.FishStarNativeBridge.gameLoaded({ phase: 'boot' });
+                });
             } else {
                 window.boot();
+                window.FishStarNativeBridge && window.FishStarNativeBridge.gameLoaded({ phase: 'boot' });
             }
         });
 

@@ -228,7 +228,93 @@ Query 参数(都可选):
 
 ## 三、App 集成 (Webview JS Bridge)
 
-App 加载 `gameUrl` 后,网页内部通过 `window.PinataGame` 与 App 互通。
+### FishStar iOS WKWebView Bridge
+
+FishStar 已兼容你们现有 iOS bridge 注册名：
+
+```swift
+let BSGameName = ["getConfig", "destroy", "gameRecharge", "gameLoaded"]
+```
+
+H5 会通过 WKWebView 标准入口调用：
+
+```js
+window.webkit.messageHandlers.gameLoaded.postMessage({ gameId: "fishstar" })
+window.webkit.messageHandlers.getConfig.postMessage({ gameId: "fishstar" })
+window.webkit.messageHandlers.gameRecharge.postMessage({ gameId: "fishstar" })
+window.webkit.messageHandlers.destroy.postMessage({ gameId: "fishstar" })
+```
+
+事件含义：
+
+| Bridge | H5 调用时机 | App 建议处理 |
+|---|---|---|
+| `gameLoaded` | 页面资源完成加载后 | 隐藏原生 loading，允许用户操作 |
+| `getConfig` | 页面加载完成后请求 App 配置,消息体会带 `gameId` / `href` / `query` | 可调用业务服务器 `get-userinfo`,再通过 `callJs(method:arguments:)` 回传配置 |
+| `gameRecharge` | H5 需要唤起充值时 | 打开 App 充值页；充值成功后通知 H5 刷新余额 |
+| `destroy` | H5 请求关闭游戏时 | 关闭当前 `WKWebView` / 返回游戏大厅 |
+
+`getConfig` 收到的 `message.body` 示例：
+
+```json
+{
+  "gameId": "fishstar",
+  "href": "https://yb.wtnslog.site/games/fishstar/index.html?...",
+  "query": {
+    "code": "...",
+    "roomId": "85422171",
+    "userId": "10121934"
+  },
+  "phase": "window.load",
+  "ts": 1770000000000
+}
+```
+
+如需在 App 或业务后端调用之前的用户信息接口，历史日志里的接口契约是：
+
+```http
+POST /callback/baishun/get-userinfo
+Host: api-ga.chatnaapp.com
+Content-Type: application/json
+```
+
+请求体字段：
+
+| 字段 | 来源/说明 |
+|---|---|
+| `app_id` | 业务 App ID |
+| `user_id` | 业务用户 ID |
+| `ss_token` | 当前用户登录 token |
+| `provider_name` | provider 名，历史样例为 `bobi` |
+| `client_ip` | 用户客户端 IP |
+| `game_id` | provider 侧游戏 ID，历史样例为 `1083` |
+| `signature` | 业务后端签名 |
+| `signature_nonce` | 签名随机串 |
+| `timestamp` | Unix 秒时间戳 |
+| `currency_type` | 币种类型，历史样例为 `0` |
+
+这些字段里的 `ss_token`、`signature`、`signature_nonce` 不能由 H5 猜测或硬编码；应由 App 或业务后端按现有登录态/签名规则生成。
+
+App 充值成功或余额变化后，可按你们现有封装调用 H5：
+
+```swift
+callJs(method: "onBalanceUpdate", arguments: ["balance": newBalance])
+```
+
+H5 侧也提供了这些兼容入口，便于后续扩展或 native 主动调用：
+
+```js
+window.FishStarNativeBridge.onConfig({ locale: "zh-CN" })
+window.onBalanceUpdate({ balance: 100000 })
+window.requestGameRecharge({ reason: "insufficient_balance" })
+window.closeFishStarGame({ reason: "user_close" })
+```
+
+> App 仍然应该加载 `/api/merchant/launch` 返回的 `gameUrl`，不要在客户端重写 URL。FishStar 玩家身份、余额和房间信息都由这个 URL 内的一次性 token 建立。
+
+### 通用 Pinata Bridge（旧游戏）
+
+Pinata Fiesta Wins 加载 `gameUrl` 后,网页内部通过 `window.PinataGame` 与 App 互通。
 
 > 当前 bridge 名字仍叫 `PinataGame`(因为只有 1 个游戏)。后续多游戏时
 > 我们会保留这个名字以兼容,事件名可能加 `pinata.`/`game.` 双前缀。
