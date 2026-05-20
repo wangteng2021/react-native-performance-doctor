@@ -20,7 +20,6 @@
         if (fishstarUserId) queryParams.set("userId", fishstarUserId);
         queryParams.set("lang", "2");
         queryParams.set("language", "2");
-        queryParams.set("code", incoming.get("fishstarCode") || incoming.get("code") || "3489b80a-925c-413b-8813-8c8d7b0fa14e");
         queryParams.set("isDataByUrl", "1");
         if (incoming.get("embed")) queryParams.set("embed", incoming.get("embed"));
         if (incoming.get("backurl")) queryParams.set("backurl", incoming.get("backurl"));
@@ -50,15 +49,23 @@
           return false;
         }
 
+        function publicLocation() {
+          var url = new URL(window.location.href);
+          url.searchParams.delete("code");
+          url.searchParams.delete("fishstarCode");
+          return url.pathname + url.search + url.hash;
+        }
+
         function basePayload(extra) {
           var query = {};
           var params = new URLSearchParams(window.location.search);
           params.forEach(function (value, key) {
+            if (key === "code" || key === "fishstarCode") return;
             query[key] = value;
           });
           var payload = {
             gameId: "fishstar",
-            href: window.location.href,
+            location: publicLocation(),
             query: query,
             ts: Date.now()
           };
@@ -104,6 +111,24 @@
         };
         window.closeFishStarGame = function (payload) {
           return window.FishStarNativeBridge.destroy(payload);
+        };
+        window.walletUpdate = function (payload) {
+          var userId = typeof payload === "string" || typeof payload === "number"
+            ? String(payload)
+            : String((payload && (payload.userId || payload.user_id || payload.userID)) || "");
+          if (!userId) return Promise.reject(new Error("walletUpdate requires userId"));
+          return fetch("/api/fishstar/wallet-update", {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ userId: userId })
+          }).then(function (response) {
+            return response.json().then(function (body) {
+              if (!response.ok || !body.ok) throw new Error((body && (body.message || body.error)) || "walletUpdate failed");
+              window.FishStarNativeBridge.onBalanceUpdate({ userId: userId, balance: body.balance, skipped: body.skipped });
+              return body;
+            });
+          });
         };
         window.addEventListener("load", function () {
           window.FishStarNativeBridge.gameLoaded({ phase: "window.load" });
