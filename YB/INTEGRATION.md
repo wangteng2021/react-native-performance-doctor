@@ -38,9 +38,10 @@
 |---|---|
 | `merchantId` | 商户 ID(例:`demo-app`) |
 | `secret` | HMAC-SHA256 共享密钥(64 hex 字符) |
+| App 凭据 | 每个商户可以配置多个 App,每个 App 有 `app-id`、`app-channel`、`app-key` |
 | **可用游戏列表** | 我们会在 admin 后台给你商户开通需要的游戏(例:`pinata-fiesta-wins`),你才能 launch 它 |
 
-后端存好 `merchantId` + `secret`。**`secret` 千万别带到前端 / App / git**。
+后端存好 `merchantId` + `secret`。App 服务端发码推荐使用 App 凭据。**`secret` 和 `app-key` 千万别带到前端 / App / git**。
 
 ---
 
@@ -50,7 +51,7 @@
 
 ### 通用约定
 
-每个请求必须带这三个 Header:
+旧商户级接口使用这三个 Header:
 
 | Header | 值 |
 |---|---|
@@ -60,6 +61,17 @@
 
 > body 是 HTTP body 的**原始字符串**(GET 没有 body 时用空串 `""`)。
 > 时间戳容差 **±5 分钟**,过期返回 `401 invalid_signature`。
+
+App 服务端生成 code 游戏地址时,推荐用 App 凭据签名:
+
+| Header | 值 |
+|---|---|
+| `app-id` | 管理后台商户详情里配置的 App ID,例如 `7990057035` |
+| `app-channel` | 管理后台商户详情里配置的 App Channel,例如 `chatna` |
+| `X-Timestamp` | 当前 Unix 时间戳(秒) |
+| `X-Signature` | `HMAC_SHA256(app-key, timestamp + "." + body)`(hex 小写) |
+
+`app-key` 只用于 App 服务端本地签名,不要作为 Header / Body 明文发送。
 
 ### 1. `POST /api/merchant/launch` — 启动游戏会话
 
@@ -73,7 +85,9 @@
   "gameId": "fishstar",
   "nickname": "Alice",
   "lang": "en",
-  "initialBalance": 50000
+  "initialBalance": 50000,
+  "baishunUserId": "100425025",
+  "baishunCode": "81acc4a9-986f-425b-83ce-d9f57df0ac7f"
 }
 ```
 
@@ -84,6 +98,12 @@
 | `nickname` | | 昵称,用于游戏内显示 |
 | `lang` | | 语言,默认 `en` |
 | `initialBalance` | | 玩家**首次**进游戏时的初始余额。后续登录沿用 DB 里的余额,这个值不再生效 |
+| `baishunUserId` | FishStar/A 服务对接时推荐 | A 服务用户 ID；不传时默认使用 `userId` / `fishstarUserId` / `externalUserId` |
+| `baishunCode` | FishStar/A 服务对接且需要换 token 时必填 | YB 服务端用它调用 A 服务 `/baishun/get-token` 换 `ss_token` |
+| `baishunSsToken` | 可选 | 如果业务侧已经有 `ss_token`，可直接传；否则 YB 会用 `baishunCode` 换 token |
+| `baishunGameId` | 可选 | A 服务 provider 侧游戏 ID；默认取服务端环境变量 `BAISHUN_GAME_ID` |
+| `baishunCurrencyType` | 可选 | A 服务币种类型；默认取服务端环境变量 `BAISHUN_CURRENCY_TYPE` |
+| `clientIp` | 可选 | A 服务 `get-userinfo` 需要的用户客户端 IP；不传时 YB 使用请求 IP |
 
 > ⚠️ 同一 `externalUserId` 在 **(merchantId, gameId)** 三元组上才唯一。
 > 也就是 `userA` 在 `pinata-fiesta-wins` 是一个独立账户,在 `fishstar` 是另一个,余额互不干扰。
@@ -101,6 +121,58 @@
 ```
 
 把 `gameUrl` 推给 App,App 在 webview 里加载。**不要重写 URL**,我们会按 token 找到对应的 `game.asset_url`,并颁发签名 `yb_embed_session`。游戏静态资源、`/authLogin` 和 `/socket.io/` 都会校验这个会话。
+
+### 1a. `POST /api/merchant/play-code` — App 服务端生成一次性 code 游戏地址
+
+如果 App 侧链路要求“客户端先从你们 App 服务端拿一个带 `code` 的游戏地址”,就让 **App 服务端** 调这个接口。
+它等同于商户后台生成测试 code 的效果,但走 server-to-server HMAC 鉴权,返回的 `gameUrl` 是 `/play?code=...&raw=1`。
+这个接口支持上面的 App 凭据签名,也兼容旧的 `X-Merchant-Id` + `secret` 签名。
+
+**App 凭据 Header 示例**
+
+```http
+app-id: 7990057035
+app-channel: chatna
+X-Timestamp: <unix-seconds>
+X-Signature: HMAC_SHA256(app-key, timestamp + "." + rawBody)
+```
+
+**请求**
+
+```json
+{
+  "externalUserId": "u_12345",
+  "gameId": "fishstar",
+  "nickname": "Alice",
+  "initialBalance": 50000,
+  "displayMode": "half"
+}
+```
+
+| 字段 | 必填 | 说明 |
+|---|---|---|
+| `externalUserId` | ✅ | 你那边的玩家唯一 ID(string) |
+| `gameId` | ✅ | 要打开的游戏,必须已给当前商户开通 |
+| `nickname` | | 首次创建玩家时使用的昵称 |
+| `initialBalance` | | 首次创建玩家时使用的初始余额；FishStar 已存在同用户时会按测试 code 逻辑追加余额 |
+| `displayMode` | | FishStar 可选:`half` / `full`,默认 `half` |
+
+**响应**
+
+```json
+{
+  "ok": true,
+  "code": "app-launch-l4kj0x1p-abc12345",
+  "gameUrl": "https://yb.wtnslog.site/play?code=app-launch-l4kj0x1p-abc12345&raw=1&displayMode=half",
+  "playUrl": "https://yb.wtnslog.site/play?code=app-launch-l4kj0x1p-abc12345&raw=1&displayMode=half",
+  "gameId": "fishstar",
+  "externalUserId": "u_12345",
+  "expiresOnFirstUse": true
+}
+```
+
+App 客户端只加载 `gameUrl`,不要去掉 `raw=1`。`code` 在 `/play` 换取内部 launch token 时会立即消费,同一个 `code` 第二次打开会返回 `410 code already used or expired`。
+不要在客户端生成 code,也不要把 merchant `secret` 放到 App 或 H5。
 
 ### 2. `GET /api/merchant/games` — 查询本商户已开通的游戏
 
@@ -250,7 +322,7 @@ window.webkit.messageHandlers.destroy.postMessage({ gameId: "fishstar" })
 | Bridge | H5 调用时机 | App 建议处理 |
 |---|---|---|
 | `gameLoaded` | 页面资源完成加载后 | 隐藏原生 loading，允许用户操作 |
-| `getConfig` | 页面加载完成后请求 App 配置,消息体会带 `gameId` / `href` / `query` | 可调用业务服务器 `get-userinfo`,再通过 `callJs(method:arguments:)` 回传配置 |
+| `getConfig` | 页面加载完成后请求 App 配置,消息体会带 `gameId` / `location` / 脱敏 `query` | 只回传客户端配置；不要让 App 直接调用 A 服务 |
 | `gameRecharge` | H5 需要唤起充值时 | 打开 App 充值页；充值成功后通知 H5 刷新余额 |
 | `destroy` | H5 请求关闭游戏时 | 关闭当前 `WKWebView` / 返回游戏大厅 |
 
@@ -259,9 +331,8 @@ window.webkit.messageHandlers.destroy.postMessage({ gameId: "fishstar" })
 ```json
 {
   "gameId": "fishstar",
-  "href": "https://yb.wtnslog.site/games/fishstar/index.html?...",
+  "location": "/games/fishstar/index.html?gsp=101&roomId=85422171&userId=10121934",
   "query": {
-    "code": "...",
     "roomId": "85422171",
     "userId": "10121934"
   },
@@ -270,7 +341,24 @@ window.webkit.messageHandlers.destroy.postMessage({ gameId: "fishstar" })
 }
 ```
 
-如需在 App 或业务后端调用之前的用户信息接口，历史日志里的接口契约是：
+充值成功后,App 调 H5 的 `walletUpdate(userId)`。H5 只通知 YB 服务端刷新余额,YB 服务端再调用 A 服务 `get-userinfo`:
+
+```swift
+callJs(method: "walletUpdate", arguments: "100425025")
+```
+
+H5 会请求：
+
+```http
+POST /api/fishstar/wallet-update
+Content-Type: application/json
+
+{ "userId": "100425025" }
+```
+
+YB 会校验 `userId` 必须等于当前 `yb_embed_session` 里的 FishStar 用户,然后更新本地 `players.score` 并向当前 WebSocket 推送 `1019` balance change。
+
+YB 服务端调用 A 服务的用户信息接口契约是：
 
 ```http
 POST /callback/baishun/get-userinfo
@@ -293,7 +381,7 @@ Content-Type: application/json
 | `timestamp` | Unix 秒时间戳 |
 | `currency_type` | 币种类型，历史样例为 `0` |
 
-这些字段里的 `ss_token`、`signature`、`signature_nonce` 不能由 H5 猜测或硬编码；应由 App 或业务后端按现有登录态/签名规则生成。
+这些字段里的 `ss_token`、`signature`、`signature_nonce` 不会暴露给 H5 或 App；它们由 YB 服务端按配置生成或缓存。
 
 App 充值成功或余额变化后，可按你们现有封装调用 H5：
 
@@ -306,18 +394,46 @@ H5 侧也提供了这些兼容入口，便于后续扩展或 native 主动调用
 ```js
 window.FishStarNativeBridge.onConfig({ locale: "zh-CN" })
 window.onBalanceUpdate({ balance: 100000 })
+window.walletUpdate("100425025")
 window.requestGameRecharge({ reason: "insufficient_balance" })
 window.closeFishStarGame({ reason: "user_close" })
 ```
 
 > App 仍然应该加载 `/api/merchant/launch` 返回的 `gameUrl`，不要在客户端重写 URL。FishStar 玩家身份、余额和房间信息都由这个 URL 内的一次性 token 建立。
 
-### 通用 Pinata Bridge（旧游戏）
+### FishStar A 服务服务端对接
+
+FishStar 对 A 服务的调用全部在 YB 服务端完成，客户端不直接请求 A 服务：
+
+| 时机 | YB 服务端动作 |
+|---|---|
+| 首次进入 / 获取余额 | 调 `/baishun/get-token` 获取 `ss_token`，再调 `/baishun/get-userinfo` 同步余额 |
+| 开炮下注 | 调 `/baishun/change-balance`，`currency_diff` 为负数 |
+| 打死鱼派奖 | 调 `/baishun/change-balance`，`currency_diff` 为正数 |
+| App 充值成功 | H5 `walletUpdate(userId)` 触发 YB 调 `/baishun/get-userinfo` 刷新余额 |
+
+服务端环境变量：
+
+| 环境变量 | 说明 |
+|---|---|
+| `BAISHUN_BASE_URL` | A 服务域名，例如 `https://api-ga.chatnaapp.com`；不配置则保持本地余额逻辑，不请求 A 服务 |
+| `BAISHUN_PATH_PREFIX` | 路径前缀，默认 `/callback/baishun` |
+| `BAISHUN_APP_ID` | 默认 `8146186998` |
+| `BAISHUN_PROVIDER_NAME` | 默认 `bobi` |
+| `BAISHUN_GAME_ID` | A 服务 provider 游戏 ID，默认 `1022` |
+| `BAISHUN_CURRENCY_TYPE` | 默认 `0` |
+| `BAISHUN_SIGNATURE_SECRET` | 生成请求体 `signature` 的服务端密钥 |
+| `BAISHUN_HEADER_SIGN_SECRET` | 如 A 服务要求 header `sign`，用这个密钥生成；不配置则不发送 `sign` |
+| `BAISHUN_TIMEOUT_MS` | 请求超时，默认 `5000` |
+
+> 还需要和 A 服务确认 `signature` / `sign` 的精确签名算法。如果算法和当前服务端配置不一致，只需要调整 YB 服务端签名生成逻辑，不需要改 H5 或 App。
+
+### 通用 Pinata Bridge（Pinata Fiesta 旧游戏）
 
 Pinata Fiesta Wins 加载 `gameUrl` 后,网页内部通过 `window.PinataGame` 与 App 互通。
 
-> 当前 bridge 名字仍叫 `PinataGame`(因为只有 1 个游戏)。后续多游戏时
-> 我们会保留这个名字以兼容,事件名可能加 `pinata.`/`game.` 双前缀。
+> `PinataGame` 只用于 Pinata Fiesta Wins 旧游戏兼容。FishStar 使用上文的
+> `getConfig` / `destroy` / `gameRecharge` / `gameLoaded` bridge 和 `walletUpdate(userId)`。
 
 ### iOS (Swift,WKWebView)
 
@@ -331,7 +447,7 @@ class GameViewController: UIViewController, WKScriptMessageHandler {
         super.viewDidLoad()
 
         let userController = WKUserContentController()
-        userController.add(self, name: "PinataGame")  // 必须叫 PinataGame
+        userController.add(self, name: "PinataGame")  // Pinata Fiesta 旧游戏必须叫 PinataGame
 
         let config = WKWebViewConfiguration()
         config.userContentController = userController
@@ -469,7 +585,7 @@ App 通过 `webView.evaluateJavaScript("window.PinataGame.bridge('METHOD', PAYLO
 | `setUser` | `{ extUserId, nickname, avatar, balance }` | 注入用户身份(已经在 launch 阶段传过的话不用重复) |
 | `setBalance` | `{ balance }` | 玩家在 App 充值后,通知游戏更新余额 |
 | `setLanguage` | `{ lang }` | 切换语言(会刷新页面) |
-| `setMute` / `setSound` / `setVolume` | `{ value }` | 音频控制(详见 `frontend/pinatawins/bridge.js`) |
+| `setMute` / `setSound` / `setVolume` | `{ value }` | 音频控制(详见 `frontend/pinata-fiesta-wins/bridge.js`) |
 | `forceClose` | `{}` | App 想关 webview 前,通知游戏保存状态。游戏会回 `pinata.close` 事件 |
 
 ---

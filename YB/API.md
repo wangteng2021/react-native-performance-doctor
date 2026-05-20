@@ -484,6 +484,43 @@ Content-Type: application/json
 
 `playUrl` 可以直接发给测试人员,打开即可用新用户身份玩。
 
+#### 7.3 商户服务端生成一次性 code 游戏地址
+
+```http
+POST /api/merchant/play-code
+app-id: 7990057035
+app-channel: chatna
+X-Timestamp: <unix-seconds>
+X-Signature: HMAC_SHA256(app-key, timestamp + "." + rawBody)
+Content-Type: application/json
+
+{
+  "externalUserId": "u_12345",
+  "gameId": "fishstar",
+  "nickname": "Alice",
+  "initialBalance": 50000,
+  "displayMode": "half"
+}
+```
+
+`app-key` 是 App 服务端本地签名密钥,不要作为 Header / Body 明文发送。此接口也兼容旧的 `X-Merchant-Id` + 商户 `secret` 签名。
+
+返回一个 `/play?code=...&raw=1` 游戏地址,用于 App 服务端下发给 App 客户端打开。`code` 只能使用一次；第一次打开会换取内部 `/embed?token=...`,第二次打开返回 `410 code already used or expired`。
+
+```json
+{
+  "ok": true,
+  "code": "app-launch-l4kj0x1p-abc12345",
+  "gameUrl": "https://yb.wtnslog.site/play?code=app-launch-l4kj0x1p-abc12345&raw=1&displayMode=half",
+  "playUrl": "https://yb.wtnslog.site/play?code=app-launch-l4kj0x1p-abc12345&raw=1&displayMode=half",
+  "gameId": "fishstar",
+  "externalUserId": "u_12345",
+  "appId": "7990057035",
+  "appChannel": "chatna",
+  "expiresOnFirstUse": true
+}
+```
+
 ---
 
 ### 8. 客户端日志上报
@@ -502,8 +539,6 @@ Content-Type: application/json or text/plain
 ```json
 { "ok": true }
 ```
-
----
 
 ## Socket.IO
 
