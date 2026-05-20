@@ -35,6 +35,7 @@
 
       <div class="tabs">
         <button class="tab is-active" data-tab="games">可用游戏</button>
+        <button class="tab" data-tab="apps">App 凭据</button>
         <button class="tab" data-tab="strategy">策略配置(本游戏)</button>
         <button class="tab" data-tab="tier">分级下注 (本游戏)</button>
         <button class="tab" data-tab="codes">测试 Code</button>
@@ -53,6 +54,28 @@
             勾选的游戏才能被本商户的玩家访问;<code>POST /api/merchant/launch</code> 会校验。
           </p>
           <div id="gameWhitelist" class="cards empty">加载中...</div>
+        </div>
+      </section>
+
+      <!-- Tab: App 凭据 -->
+      <section class="tab-panel" data-panel="apps">
+        <div class="panel">
+          <div class="panel-title">
+            <h2>App 凭据</h2>
+            <span id="appStatus" class="status">就绪</span>
+          </div>
+          <p class="subtle" style="margin-bottom: 16px;">
+            每个 App 使用 <code>appId</code> + <code>appChannel</code> 识别。完整 <code>appKey</code> 只会在创建或轮换时显示一次。
+          </p>
+          <form id="appForm" class="form-grid">
+            <label>App 名称<input name="name" placeholder="例如 iOS 主包" maxlength="100" /></label>
+            <label>App ID<input name="appId" required maxlength="100" autocomplete="off" /></label>
+            <label>App Channel<input name="appChannel" required maxlength="100" autocomplete="off" /></label>
+            <label>App Key<input name="appKey" placeholder="留空由后端生成" maxlength="200" autocomplete="off" /></label>
+            <button class="primary-button" type="submit">创建 App</button>
+          </form>
+          <h3 style="margin-top:18px;">已配置 App</h3>
+          <div id="appList" class="cards empty" style="margin-top: 8px;">加载中...</div>
         </div>
       </section>
 
@@ -373,6 +396,149 @@
             gameWlEl.textContent = "加载失败:" + e.message;
           }
         }
+
+        // ========== App 凭据 Tab ==========
+        const appForm = document.getElementById("appForm");
+        const appStatus = document.getElementById("appStatus");
+        const appListEl = document.getElementById("appList");
+
+        function getAppFields(app) {
+          return {
+            appId: app.appId || app.app_id || "",
+            appChannel: app.appChannel || app.app_channel || "",
+            name: app.name || "",
+            status: app.status || "active",
+            appKeyMasked: app.appKeyMasked || "—",
+            createdAt: app.createdAt || app.created_at || "—",
+            updatedAt: app.updatedAt || app.updated_at || "—"
+          };
+        }
+
+        function showAppKeyOnce(appKey) {
+          if (!appKey) {
+            window.alert("App Key 未返回,请立即轮换生成新 key。");
+            return;
+          }
+          window.alert(`App Key(只显示这一次):\n${appKey}`);
+        }
+
+        async function postMerchantApp(path, payload) {
+          const data = await YBAdmin.fetchJson(`/api/admin/merchants/${encodeURIComponent(merchantId)}/apps${path}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+          });
+          if (!data.ok) throw new Error(data.error || "save failed");
+          return data;
+        }
+
+        async function loadApps() {
+          YBAdmin.setStatusOn(appStatus, "加载中...");
+          try {
+            const data = await YBAdmin.fetchJson(`/api/admin/merchants/${encodeURIComponent(merchantId)}/apps`);
+            const apps = data.items || data.apps || [];
+            if (!apps.length) {
+              appListEl.classList.add("empty");
+              appListEl.innerHTML = '<p class="subtle">还没有 App 凭据。</p>';
+              YBAdmin.setStatusOn(appStatus, "就绪");
+              return;
+            }
+            appListEl.classList.remove("empty");
+            appListEl.innerHTML = apps.map((app) => {
+              const item = getAppFields(app);
+              const isActive = item.status !== "disabled";
+              const label = item.name || `${item.appId} / ${item.appChannel}`;
+              return `
+                <article class="code-card">
+                  <div>
+                    <p class="code-value">${YBAdmin.escapeHtml(label)}</p>
+                    <p class="meta">
+                      appId: <code>${YBAdmin.escapeHtml(item.appId)}</code> ·
+                      channel: <code>${YBAdmin.escapeHtml(item.appChannel)}</code> ·
+                      key: <code>${YBAdmin.escapeHtml(item.appKeyMasked)}</code> ·
+                      ${YBAdmin.statusBadge(item.status)}
+                    </p>
+                    <p class="meta">创建 ${YBAdmin.escapeHtml(item.createdAt)} · 更新 ${YBAdmin.escapeHtml(item.updatedAt)}</p>
+                  </div>
+                  <div class="actions">
+                    <button class="ghost-button" data-app-action="rename" data-app-id="${YBAdmin.escapeHtml(item.appId)}" data-app-channel="${YBAdmin.escapeHtml(item.appChannel)}" data-app-name="${YBAdmin.escapeHtml(item.name)}" type="button">改名</button>
+                    <button class="ghost-button" data-app-action="toggle" data-app-id="${YBAdmin.escapeHtml(item.appId)}" data-app-channel="${YBAdmin.escapeHtml(item.appChannel)}" data-next-status="${isActive ? "disabled" : "active"}" type="button">${isActive ? "禁用" : "启用"}</button>
+                    <button class="ghost-button" data-app-action="rotate" data-app-id="${YBAdmin.escapeHtml(item.appId)}" data-app-channel="${YBAdmin.escapeHtml(item.appChannel)}" type="button">轮换 Key</button>
+                  </div>
+                </article>
+              `;
+            }).join("");
+            YBAdmin.setStatusOn(appStatus, `已加载 ${apps.length} 个 App`);
+          } catch (e) {
+            appListEl.textContent = "加载失败:" + e.message;
+            YBAdmin.setStatusOn(appStatus, e.message, false);
+          }
+        }
+
+        async function onCreateApp(event) {
+          event.preventDefault();
+          const fd = new FormData(appForm);
+          const payload = {
+            appId: String(fd.get("appId") || "").trim(),
+            appChannel: String(fd.get("appChannel") || "").trim()
+          };
+          const name = String(fd.get("name") || "").trim();
+          const appKey = String(fd.get("appKey") || "").trim();
+          if (name) payload.name = name;
+          if (appKey) payload.appKey = appKey;
+          if (!payload.appId || !payload.appChannel) {
+            YBAdmin.setStatusOn(appStatus, "App ID 和 App Channel 必填", false);
+            return;
+          }
+          YBAdmin.setStatusOn(appStatus, "创建中...");
+          try {
+            const data = await postMerchantApp("", payload);
+            showAppKeyOnce(data.appKey || (data.app && data.app.appKey) || appKey);
+            appForm.reset();
+            YBAdmin.setStatusOn(appStatus, "已创建 App");
+            await loadApps();
+          } catch (e) {
+            YBAdmin.setStatusOn(appStatus, e.message, false);
+          }
+        }
+
+        async function onAppAction(event) {
+          const btn = event.target.closest("[data-app-action]");
+          if (!btn) return;
+          const appId = btn.getAttribute("data-app-id");
+          const appChannel = btn.getAttribute("data-app-channel");
+          const action = btn.getAttribute("data-app-action");
+          btn.disabled = true;
+          try {
+            if (action === "rotate") {
+              if (!window.confirm(`确定轮换 ${appId} / ${appChannel} 的 App Key? 旧 key 立即失效。`)) return;
+              YBAdmin.setStatusOn(appStatus, "轮换中...");
+              const data = await postMerchantApp("/rotate", { appId, appChannel });
+              showAppKeyOnce(data.appKey || (data.app && data.app.appKey));
+              YBAdmin.setStatusOn(appStatus, "已轮换 Key");
+            } else if (action === "toggle") {
+              const status = btn.getAttribute("data-next-status");
+              YBAdmin.setStatusOn(appStatus, "保存中...");
+              await postMerchantApp("/update", { appId, appChannel, status });
+              YBAdmin.setStatusOn(appStatus, status === "active" ? "已启用" : "已禁用");
+            } else if (action === "rename") {
+              const currentName = btn.getAttribute("data-app-name") || "";
+              const name = window.prompt("输入新的 App 名称", currentName);
+              if (name == null) return;
+              YBAdmin.setStatusOn(appStatus, "保存中...");
+              await postMerchantApp("/update", { appId, appChannel, name: name.trim() });
+              YBAdmin.setStatusOn(appStatus, "已改名");
+            }
+            await loadApps();
+          } catch (e) {
+            YBAdmin.setStatusOn(appStatus, e.message, false);
+          } finally {
+            btn.disabled = false;
+          }
+        }
+
+        appForm.addEventListener("submit", onCreateApp);
+        appListEl.addEventListener("click", onAppAction);
 
         function rebuildGameSelectors() {
           // 主选择器(策略/Tier/Code 用):只显示 enabled 的游戏
@@ -836,6 +1002,7 @@
           window.__gamesCache = await YBAdmin.loadAllGames();
           await loadOverview();
           await loadGameWhitelist();
+          await loadApps();
           loadTxns();
           loadPlayers();
         })();
