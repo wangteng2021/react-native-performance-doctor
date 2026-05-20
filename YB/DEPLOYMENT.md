@@ -148,6 +148,15 @@ cd yb
 | `EMBED_SESSION_SECRET` | 无 | `yb_embed_session` 签名密钥。生产必须固定配置,否则 Node 重启会让已打开的游戏会话失效 |
 | `WTNS_GAMES_ROOT` | `/www/wwwroot/wtns/games` | 多游戏静态根目录,下面按 `gameId` 放置,例如 `fishstar/index.html` |
 | `WTNS_ADMIN_DIR` / `WTNS_OFFICIAL_DIR` | `/www/wwwroot/wtns/admin` / `/www/wwwroot/wtns/official` | 拆 repo 部署时覆盖 admin 和官网静态目录 |
+| `BAISHUN_BASE_URL` | 空 | Baishun A 服务 base URL。留空时关闭 Baishun 对接,FishStar 继续使用 YB 内部余额 |
+| `BAISHUN_PATH_PREFIX` | `/callback/baishun` | Baishun A 服务接口前缀,最终会请求 `get-token`、`get-userinfo`、`change-balance` |
+| `BAISHUN_APP_ID` | `8146186998` | Baishun app id。可被商户 launch payload 覆盖 |
+| `BAISHUN_PROVIDER_NAME` | `bobi` | Baishun provider name |
+| `BAISHUN_GAME_ID` | `1022` | Baishun provider game id |
+| `BAISHUN_CURRENCY_TYPE` | `0` | Baishun currency type |
+| `BAISHUN_SIGNATURE_SECRET` | 空 | Baishun body `signature` 密钥,只放服务端环境变量,不要下发到 H5/native |
+| `BAISHUN_HEADER_SIGN_SECRET` | 空 | Baishun 请求头签名密钥,只放服务端环境变量 |
+| `BAISHUN_TIMEOUT_MS` / `BAISHUN_TOKEN_TTL_MS` | `5000` / `1200000` | Baishun 请求超时和 get-token 缓存时间(ms) |
 
 ### 推荐做法:写到 PM2 ecosystem 文件(见[附录 A](#附录-apm2-ecosystem-配置))
 
@@ -158,7 +167,16 @@ export PORT=3000
 export CORS_ALLOWED_ORIGINS="https://your-domain.com"
 export EMBED_SESSION_SECRET="replace-with-a-long-random-secret"
 export WTNS_GAMES_ROOT="/www/wwwroot/wtns/games"
+export BAISHUN_BASE_URL="https://a-service.example.com"
+export BAISHUN_SIGNATURE_SECRET="replace-with-baishun-body-sign-secret"
+export BAISHUN_HEADER_SIGN_SECRET="replace-with-baishun-header-sign-secret"
 ```
+
+Baishun 生产启用注意:
+
+- `BAISHUN_BASE_URL` 留空就是关闭 A 服务同步,适合本地开发和未拿到 A 服务配置前验证 FishStar。
+- `BAISHUN_SIGNATURE_SECRET`、`BAISHUN_HEADER_SIGN_SECRET`、A 服务 `code` / `ss_token` 只允许在 YB 服务端使用,不要写进静态文件、URL 或 App bridge payload。
+- 商户 launch 如果需要覆盖 Baishun 用户上下文,通过服务端 `POST /api/merchant/launch` payload 传 `baishunCode`、`baishunSsToken`、`baishunUserId` 等字段,由 YB 服务端保存到一次性 launch token。
 
 ---
 
@@ -529,7 +547,12 @@ module.exports = {
     env: {
       NODE_ENV: 'production',
       PORT: 3000,
-      CORS_ALLOWED_ORIGINS: 'https://your-domain.com'
+      CORS_ALLOWED_ORIGINS: 'https://your-domain.com',
+      EMBED_SESSION_SECRET: 'replace-with-a-long-random-secret',
+      WTNS_GAMES_ROOT: '/www/wwwroot/wtns/games',
+      BAISHUN_BASE_URL: 'https://a-service.example.com',
+      BAISHUN_SIGNATURE_SECRET: 'replace-with-baishun-body-sign-secret',
+      BAISHUN_HEADER_SIGN_SECRET: 'replace-with-baishun-header-sign-secret'
     }
   }]
 };

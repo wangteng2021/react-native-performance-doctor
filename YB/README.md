@@ -98,10 +98,10 @@ frontend/
     bridge.js                JS Bridge:setMute/setSound/setVolume/closeGame
     win-effect.js / .css     英文大奖动画
     runtime-config.js
-  fishstar/                  本地重构的 FishStar 捕鱼游戏,复用同一后端协议和 PinataGame bridge
-    index.html
-    assets.js / game.js      Canvas 捕鱼 UI + 远程真实音效链接
-    bridge.js / protocol.js  App bridge + /authLogin + Socket.IO polling
+  fishstar/                  YB 自有 FishStar 捕鱼游戏,使用 FishStarNativeBridge + YB 服务端代理
+    index.html               H5 入口,内联 iOS bridge、walletUpdate、/authLogin 启动参数
+    main.ybpx2.js            YB 修补后的 Cocos loader / resume 流程
+    assets/ / lib/ / src/    自托管游戏资源和配置
 
 admin/                       WTNS Gaming · Admin 后台(每页内联 JS + shared.js)
   login.html / login.js
@@ -126,6 +126,7 @@ deploy.sh                    服务器一键部署脚本
 |---|---|
 | `games` | 游戏库:`game_id`、`name`、`type`、`status (active/beta/disabled)`、`asset_url`、`default_strategy` |
 | `merchants` | 商户:`merchant_id`、`secret`、`ip_whitelist`、`callback_url`、`status` |
+| `merchant_apps` | 商户下的 App 凭据:`app_id`、`app_channel`、`app_key`、`status` |
 | `merchant_games` | 商户 × 游戏 白名单:`(merchant_id, game_id, enabled)` |
 | `merchant_game_strategies` | 商户 × 游戏 策略 override:`(merchant_id, game_id, strategy_config_json)` |
 | `players` | 玩家:`(merchant_id, external_user_id, game_id)` 唯一 — 同一外部用户在不同游戏视为独立账户 |
@@ -217,7 +218,7 @@ const cfg = getEffectiveStrategy(merchantId, gameId);
 
 ## 七、英文大奖动画
 
-`frontend/pinatawins/win-effect.js` 的全屏英文 overlay,根据 `winscore / totalBet` 倍数分级显示:
+`frontend/pinata-fiesta-wins/win-effect.js` 的全屏英文 overlay,根据 `winscore / totalBet` 倍数分级显示:
 
 | 倍数(基于 `bigWinMultiplier`) | 标题 |
 |---|---|
@@ -268,6 +269,14 @@ npm run check                          # 全部 .js 语法检查(包括 gameServ
 | `CORS_ALLOWED_ORIGINS` | `*`(dev) | CORS 白名单,生产必须显式 |
 | `ADMIN_USERNAME` | `admin` | 默认管理员账号 |
 | `ADMIN_PASSWORD` | (无,**必填**) | 第一次启动会用 scrypt 写入 admin_users |
+| `EMBED_SESSION_SECRET` | (无,生产必填) | `yb_embed_session` 签名密钥,生产必须固定配置 |
+| `WTNS_GAMES_ROOT` | `/www/wwwroot/wtns/games` | 生产游戏静态目录根路径 |
+| `BAISHUN_BASE_URL` | 空 | Baishun A 服务 base URL。留空时 FishStar 使用 YB 内部余额 |
+| `BAISHUN_PATH_PREFIX` | `/callback/baishun` | Baishun `get-token` / `get-userinfo` / `change-balance` 接口前缀 |
+| `BAISHUN_APP_ID` / `BAISHUN_PROVIDER_NAME` / `BAISHUN_GAME_ID` | `8146186998` / `bobi` / `1022` | Baishun 默认游戏上下文 |
+| `BAISHUN_CURRENCY_TYPE` | `0` | Baishun currency type |
+| `BAISHUN_SIGNATURE_SECRET` / `BAISHUN_HEADER_SIGN_SECRET` | 空 | Baishun 服务端签名密钥,只放后端环境变量,不要下发给 H5/native |
+| `BAISHUN_TIMEOUT_MS` / `BAISHUN_TOKEN_TTL_MS` | `5000` / `1200000` | Baishun 请求超时和 get-token 缓存时间(ms) |
 
 参考 [`.env.example`](./.env.example)。
 
@@ -295,5 +304,5 @@ PINATA_MIRROR_BASE_URL="<your-authorized-asset-base-url>/" python3 scripts/mirro
 
 - Socket.IO session 仍是内存态,`pm2 restart` 后会断连(客户端自动重连,玩家无感)
 - 公开域名(yb.wtnslog.site)境外解析占位 IP,**国内用户不受影响**
-- 当前游戏库只有 1 个生产游戏(pinata-fiesta-wins),其它游戏接入时把资源拷到
-  `frontend/<game-id>/` 后在 admin 注册即可
+- 当前游戏库已包含 `pinata-fiesta-wins` 和 `fishstar`;其它游戏接入时把资源拷到
+  `frontend/<game-id>/` 或生产 `games/<game-id>/` 后在 admin 注册即可
