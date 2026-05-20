@@ -48,6 +48,47 @@ function verifyServerSignature(secret, payloadString, timestamp, signature) {
   return timingSafeEqualHex(expected, String(signature || ""));
 }
 
+function normalizeAppId(value) {
+  const appId = String(value || "").trim();
+  if (!/^[A-Za-z0-9_-]{2,64}$/.test(appId)) throw new Error("appId 必须是 2-64 位字母数字或下划线/横杠");
+  return appId;
+}
+
+function normalizeAppChannel(value) {
+  const channel = String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 64);
+  if (!channel) throw new Error("appChannel 必填");
+  return channel;
+}
+
+function normalizeAppKey(value) {
+  const appKey = String(value || "").trim();
+  if (!appKey) return crypto.randomBytes(32).toString("hex");
+  if (appKey.length < 16 || appKey.length > 128) throw new Error("appKey 必须是 16-128 位字符串");
+  return appKey;
+}
+
+function toMerchantApp(row, includeKey = false) {
+  if (!row) return null;
+  const item = {
+    id: row.id,
+    merchantId: row.merchant_id,
+    appId: row.app_id,
+    appChannel: row.app_channel,
+    name: row.name || "",
+    status: row.status,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+  if (includeKey) item.appKey = row.app_key;
+  else item.appKeyMasked = `${String(row.app_key || "").slice(0, 4)}...${String(row.app_key || "").slice(-4)}`;
+  return item;
+}
+
 // ========== 商户 CRUD ==========
 
 function listMerchants() {
@@ -110,6 +151,75 @@ function rotateSecret(merchantId) {
   return secret;
 }
 
+function listMerchantApps(merchantId) {
+  const db = getDb();
+  return db.prepare(
+    `SELECT id, merchant_id, app_id, app_channel, app_key, name, status, created_at, updated_at
+       FROM merchant_apps
+      WHERE merchant_id = ?
+      ORDER BY id DESC`
+  ).all(merchantId).map((row) => toMerchantApp(row));
+}
+
+function getMerchantApp(appId, appChannel) {
+  const db = getDb();
+  const row = db.prepare(
+    `SELECT id, merchant_id, app_id, app_channel, app_key, name, status, created_at, updated_at
+       FROM merchant_apps
+      WHERE app_id = ? AND app_channel = ?`
+  ).get(normalizeAppId(appId), normalizeAppChannel(appChannel));
+  return row || null;
+}
+
+function createMerchantApp({ merchantId, appId, appChannel, appKey, name = "" } = {}) {
+  if (!merchantId) throw new Error("merchantId 必填");
+  const db = getDb();
+  const merchant = getMerchant(merchantId);
+  if (!merchant) throw new Error(`商户 ${merchantId} 不存在`);
+  const normalizedAppId = normalizeAppId(appId);
+  const normalizedChannel = normalizeAppChannel(appChannel);
+  const finalKey = normalizeAppKey(appKey);
+  try {
+    db.prepare(
+      `INSERT INTO merchant_apps (merchant_id, app_id, app_channel, app_key, name)
+       VALUES (?, ?, ?, ?, ?)`
+    ).run(merchantId, normalizedAppId, normalizedChannel, finalKey, String(name || "").trim().slice(0, 100));
+  } catch (error) {
+    if (String(error.message).includes("UNIQUE")) throw new Error("appId + appChannel 已存在");
+    throw error;
+  }
+  const row = getMerchantApp(normalizedAppId, normalizedChannel);
+  return toMerchantApp(row, true);
+}
+
+function updateMerchantApp(merchantId, appId, appChannel, patch = {}) {
+  const app = getMerchantApp(appId, appChannel);
+  if (!app || app.merchant_id !== merchantId) throw new Error("app_not_found");
+  const fields = [];
+  const values = [];
+  if (patch.name !== undefined) { fields.push("name = ?"); values.push(String(patch.name || "").trim().slice(0, 100)); }
+  if (patch.status !== undefined) {
+    if (!["active", "disabled"].includes(patch.status)) throw new Error("status 只能是 active / disabled");
+    fields.push("status = ?"); values.push(patch.status);
+  }
+  if (fields.length === 0) return toMerchantApp(app);
+  fields.push("updated_at = datetime('now')");
+  values.push(app.id);
+  getDb().prepare(`UPDATE merchant_apps SET ${fields.join(", ")} WHERE id = ?`).run(...values);
+  return toMerchantApp(getMerchantApp(appId, appChannel));
+}
+
+function rotateMerchantAppKey(merchantId, appId, appChannel) {
+  const app = getMerchantApp(appId, appChannel);
+  if (!app || app.merchant_id !== merchantId) throw new Error("app_not_found");
+  const appKey = crypto.randomBytes(32).toString("hex");
+  getDb().prepare(
+    "UPDATE merchant_apps SET app_key = ?, updated_at = datetime('now') WHERE id = ?"
+  ).run(appKey, app.id);
+  const updated = getMerchantApp(appId, appChannel);
+  return toMerchantApp(updated, true);
+}
+
 // 读商户独立策略配置(JSON);如果 null 表示沿用全局
 function getMerchantStrategy(merchantId) {
   const db = getDb();
@@ -165,11 +275,20 @@ function consumeLaunchToken(token) {
   let payload = {};
   try { payload = JSON.parse(row.payload || "{}"); } catch (error) { /* ignore */ }
   return {
+    token: row.token,
     merchantId: row.merchant_id,
     externalUserId: row.external_user_id,
     gameId: row.game_id,
     payload
   };
+}
+
+function getLaunchTokenPayload(token) {
+  if (!token) return {};
+  const db = getDb();
+  const row = db.prepare("SELECT payload FROM launch_tokens WHERE token = ?").get(token);
+  if (!row) return {};
+  try { return JSON.parse(row.payload || "{}"); } catch (error) { return {}; }
 }
 
 // ========== Transactions ==========
@@ -266,12 +385,18 @@ module.exports = {
   createMerchant,
   updateMerchant,
   rotateSecret,
+  listMerchantApps,
+  getMerchantApp,
+  createMerchantApp,
+  updateMerchantApp,
+  rotateMerchantAppKey,
   // 商户独立策略
   getMerchantStrategy,
   setMerchantStrategy,
   // launch token
   createLaunchToken,
   consumeLaunchToken,
+  getLaunchTokenPayload,
   TOKEN_TTL_SECONDS,
   // transactions
   recordTransaction,

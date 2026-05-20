@@ -52,6 +52,11 @@ function createPlayUrl(origin, code, displayMode) {
   return `${origin}/play?code=${encodeURIComponent(code)}${suffix}`;
 }
 
+function createDirectPlayUrl(origin, code, displayMode) {
+  const suffix = displayMode ? `&displayMode=${encodeURIComponent(displayMode)}` : "";
+  return `${origin}/play?code=${encodeURIComponent(code)}&raw=1${suffix}`;
+}
+
 function rowInitialBalance(row) {
   return normalizeInitialBalance(row.initial_balance);
 }
@@ -215,6 +220,96 @@ function generateTestCodes(options = {}, origin = "") {
   };
 }
 
+function generateMerchantPlayCode(options = {}, origin = "") {
+  const db = getDb();
+  const merchantId = options.merchantId ? normalizeSlug(options.merchantId, "") : null;
+  const gameId = options.gameId ? String(options.gameId).trim() : null;
+  const externalUserId = normalizeExternalUserId(options);
+  if (!merchantId) throw new Error("merchantId 必填");
+  if (!gameId) throw new Error("gameId 必填");
+  if (!externalUserId) throw new Error("externalUserId 必填");
+  const merchant = db.prepare("SELECT merchant_id FROM merchants WHERE merchant_id = ?").get(merchantId);
+  if (!merchant) throw new Error(`商户 ${merchantId} 不存在`);
+  const game = db.prepare("SELECT game_id, status FROM games WHERE game_id = ?").get(gameId);
+  if (!game) throw new Error(`游戏 ${gameId} 不存在`);
+  const allowed = db.prepare(
+    `SELECT enabled FROM merchant_games WHERE merchant_id = ? AND game_id = ?`
+  ).get(merchantId, gameId);
+  if (!allowed || !allowed.enabled) {
+    throw new Error(`商户 ${merchantId} 没有启用游戏 ${gameId}`);
+  }
+
+  const prefix = normalizeSlug(options.prefix, "app-launch");
+  const scenario = normalizeSlug(options.scenario, "app-server-launch");
+  const displayMode = gameId === "fishstar" ? normalizeDisplayMode(options.displayMode) : null;
+  const initialBalance = normalizeInitialBalance(options.initialBalance ?? options.balance);
+  const note = String(options.note || "app-server-generated").trim().slice(0, 200);
+  const code = createCode(prefix);
+  const nickname = String(options.nickname || `QA ${code.slice(-6)}`).trim().slice(0, 80);
+  const entry = {
+    code,
+    prefix,
+    scenario,
+    displayMode,
+    initialBalance,
+    note,
+    merchantId,
+    gameId,
+    externalUserId,
+    nickname,
+    createdAt: new Date().toISOString(),
+    playUrl: createDirectPlayUrl(origin, code, displayMode)
+  };
+
+  const insertOne = db.transaction(() => {
+    db.prepare(
+      `INSERT INTO test_codes (code, prefix, scenario, display_mode, initial_balance, note, play_url, merchant_id, external_user_id, game_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      entry.code,
+      entry.prefix,
+      entry.scenario,
+      entry.displayMode,
+      entry.initialBalance,
+      entry.note,
+      entry.playUrl,
+      entry.merchantId,
+      entry.externalUserId,
+      entry.gameId
+    );
+    const existingPlayer = loadMerchantPlayer(db, entry.merchantId, entry.externalUserId, entry.gameId);
+    if (existingPlayer && entry.gameId === "fishstar") {
+      creditExistingPlayer(db, entry, existingPlayer.id);
+      return;
+    }
+    if (!existingPlayer) {
+      resolvePlayerFromAuthInput({
+        merchantId: entry.merchantId,
+        externalUserId: entry.externalUserId,
+        gameId: entry.gameId,
+        payload: {
+          initialBalance: entry.initialBalance,
+          nickname: entry.nickname
+        }
+      });
+    }
+  });
+  insertOne();
+
+  return {
+    ok: true,
+    code: entry.code,
+    playUrl: entry.playUrl,
+    gameUrl: entry.playUrl,
+    merchantId: entry.merchantId,
+    externalUserId: entry.externalUserId,
+    gameId: entry.gameId,
+    displayMode: entry.displayMode,
+    initialBalance: entry.initialBalance,
+    createdAt: entry.createdAt
+  };
+}
+
 function listTestCodes({ merchantId, gameId, limit } = {}) {
   const db = getDb();
   const cap = Math.min(LIST_LIMIT, Math.max(10, Math.round(Number(limit) || LIST_LIMIT)));
@@ -257,6 +352,18 @@ function lookupTestCode(code) {
   };
 }
 
+function consumeTestCode(code) {
+  if (!code) return null;
+  const db = getDb();
+  const result = db.prepare(
+    `UPDATE test_codes
+        SET consumed_at = datetime('now')
+      WHERE code = ? AND consumed_at IS NULL`
+  ).run(code);
+  if (result.changes !== 1) return null;
+  return lookupTestCode(code);
+}
+
 function markTestCodeConsumed(code) {
   if (!code) return;
   const db = getDb();
@@ -265,7 +372,9 @@ function markTestCodeConsumed(code) {
 
 module.exports = {
   generateTestCodes,
+  generateMerchantPlayCode,
   listTestCodes,
   lookupTestCode,
+  consumeTestCode,
   markTestCodeConsumed
 };

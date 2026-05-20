@@ -22,7 +22,13 @@ const {
   updateStrategyConfig,
   getAuditLog
 } = require("./gameStrategyConfig");
-const { generateTestCodes, listTestCodes, lookupTestCode, markTestCodeConsumed } = require("./testCodeService");
+const {
+  generateTestCodes,
+  generateMerchantPlayCode,
+  listTestCodes,
+  lookupTestCode,
+  consumeTestCode
+} = require("./testCodeService");
 const gameService = require("./gameService");
 const {
   ensureSeedAdmin,
@@ -36,6 +42,7 @@ const {
   getAdminSession
 } = require("./adminAuth");
 const merchantService = require("./merchantService");
+const baishunService = require("./baishunService");
 
 // 启动时 seed 默认管理员:读 env ADMIN_USERNAME / ADMIN_PASSWORD
 // ADMIN_FORCE_RESET=1 会强制把密码重置成 env 里的(用于忘记密码)
@@ -499,6 +506,62 @@ function authInputFromEmbedSession(session) {
   };
 }
 
+function readHeader(request, ...names) {
+  for (const name of names) {
+    const value = request.headers[String(name).toLowerCase()];
+    if (value !== undefined && value !== null && String(value).trim()) return String(value).trim();
+  }
+  return "";
+}
+
+function authenticateMerchantApiRequest(request, body, url) {
+  const timestamp = readHeader(request, "x-timestamp");
+  const signature = readHeader(request, "x-signature");
+  const appId = readHeader(request, "app-id", "x-app-id");
+  const appChannel = readHeader(request, "app-channel", "x-app-channel");
+  const ip = getClientIp(request);
+
+  if (appId || appChannel) {
+    if (url.pathname !== "/api/merchant/play-code") return { status: 403, error: "app_credentials_only_support_play_code" };
+    let app;
+    try { app = appId && appChannel ? merchantService.getMerchantApp(appId, appChannel) : null; } catch (error) { app = null; }
+    if (!app) return { status: 401, error: "app_not_found" };
+    const merchant = merchantService.getMerchant(app.merchant_id);
+    if (!merchant) return { status: 401, error: "merchant_not_found" };
+    if (merchant.status !== "active") return { status: 403, error: "merchant_disabled" };
+    if (app.status !== "active") return { status: 403, error: "app_disabled" };
+    if (!merchantService.isIpAllowed(merchant, ip)) return { status: 403, error: "ip_not_allowed", ip };
+    if (!merchantService.verifyServerSignature(app.app_key, body || "", timestamp, signature)) return { status: 401, error: "invalid_signature" };
+    return { merchant, app, authType: "app" };
+  }
+
+  const merchantId = readHeader(request, "x-merchant-id");
+  const merchant = merchantId ? merchantService.getMerchant(merchantId) : null;
+  if (!merchant) return { status: 401, error: "merchant_not_found" };
+  if (merchant.status !== "active") return { status: 403, error: "merchant_disabled" };
+  if (!merchantService.isIpAllowed(merchant, ip)) return { status: 403, error: "ip_not_allowed", ip };
+  if (!merchantService.verifyServerSignature(merchant.secret, body || "", timestamp, signature)) return { status: 401, error: "invalid_signature" };
+  return { merchant, app: null, authType: "merchant" };
+}
+
+function sanitizeEmbedSessionPayload(payload = {}) {
+  const safeKeys = [
+    "nickname", "avatar", "lang", "displayMode", "roomId", "fishstarUserId", "userId", "initialBalance"
+  ];
+  const safe = {};
+  for (const key of safeKeys) {
+    if (payload[key] !== undefined && payload[key] !== null) safe[key] = payload[key];
+  }
+  return safe;
+}
+
+function getLaunchPayloadForSession(session) {
+  const dbPayload = session && session.launchToken
+    ? merchantService.getLaunchTokenPayload(session.launchToken)
+    : {};
+  return { ...(session && session.payload ? session.payload : {}), ...dbPayload };
+}
+
 function buildEmbedLocation(assetUrl, consumed) {
   const location = new URL(assetUrl, "http://yb.local");
   const params = location.searchParams;
@@ -519,8 +582,28 @@ function buildEmbedLocation(assetUrl, consumed) {
 
 function getFishStarSessionUserId(session) {
   if (!session) return "";
-  const payload = session.payload || {};
+  const payload = getLaunchPayloadForSession(session);
   return String(payload.fishstarUserId ?? payload.userId ?? session.externalUserId ?? "").trim();
+}
+
+function firstPresent(...values) {
+  for (const value of values) {
+    if (value !== undefined && value !== null && String(value).trim()) return value;
+  }
+  return null;
+}
+
+function buildBaishunLaunchPayload(payload, externalUserId) {
+  return {
+    appId: firstPresent(payload.baishunAppId, payload.appId),
+    userId: firstPresent(payload.baishunUserId, payload.userId, payload.fishstarUserId, externalUserId),
+    code: firstPresent(payload.baishunCode, payload.code),
+    ssToken: firstPresent(payload.baishunSsToken, payload.ssToken, payload.sstoken),
+    providerName: firstPresent(payload.baishunProviderName, payload.providerName),
+    providerGameId: firstPresent(payload.baishunGameId, payload.providerGameId),
+    currencyType: firstPresent(payload.baishunCurrencyType, payload.currencyType),
+    clientIp: firstPresent(payload.clientIp, payload.baishunClientIp)
+  };
 }
 
 function enforceFishStarQueryUserId(url, session) {
@@ -630,13 +713,14 @@ function buildFishStarRouteResponse(request) {
 function buildFishStarPlayer(session, posOverride = 0) {
   const internalPlayer = getFishStarInternalPlayer(session);
   const userId = getFishStarSessionUserId(session);
+  const payload = getLaunchPayloadForSession(session);
   return {
     userId,
     user_id: userId,
     userID: userId,
     coin: internalPlayer.score,
-    nickName: internalPlayer.nickname || (session && session.payload && session.payload.nickname) || `FishStar ${userId}`,
-    avatar: (session && session.payload && session.payload.avatar) || "",
+    nickName: internalPlayer.nickname || payload.nickname || `FishStar ${userId}`,
+    avatar: payload.avatar || "",
     pos: posOverride,
     betIndex: 0,
     fireCount: 0,
@@ -647,9 +731,101 @@ function buildFishStarPlayer(session, posOverride = 0) {
 }
 
 const fishStarRooms = new Map();
+const fishStarUserLocks = new Map();
+
+async function withFishStarUserLock(userId, operation) {
+  const key = String(userId || "");
+  const previous = fishStarUserLocks.get(key) || Promise.resolve();
+  let release;
+  const gate = new Promise((resolve) => { release = resolve; });
+  const next = previous.catch(() => {}).then(() => gate);
+  fishStarUserLocks.set(key, next);
+  await previous.catch(() => {});
+  try {
+    return await operation();
+  } finally {
+    release();
+    if (fishStarUserLocks.get(key) === next) fishStarUserLocks.delete(key);
+  }
+}
 
 function getFishStarInternalPlayer(session) {
   return resolvePlayerFromAuthInput(authInputFromEmbedSession(session));
+}
+
+function buildFishStarBaishunContext(session, options = {}) {
+  const payload = getLaunchPayloadForSession(session);
+  const baishun = payload.baishun || {};
+  const userId = getFishStarSessionUserId(session);
+  return baishunService.buildContext({
+    appId: firstPresent(baishun.appId, payload.baishunAppId, payload.appId),
+    userId: firstPresent(options.userId, baishun.userId, payload.baishunUserId, userId),
+    code: firstPresent(baishun.code, payload.baishunCode, payload.code),
+    ssToken: firstPresent(baishun.ssToken, payload.baishunSsToken, payload.ssToken, payload.sstoken),
+    providerName: firstPresent(baishun.providerName, payload.baishunProviderName, payload.providerName),
+    clientIp: firstPresent(options.clientIp, session && session.clientIp, baishun.clientIp, payload.clientIp, payload.baishunClientIp),
+    providerGameId: firstPresent(baishun.providerGameId, payload.baishunGameId, payload.providerGameId),
+    currencyType: firstPresent(baishun.currencyType, payload.baishunCurrencyType, payload.currencyType)
+  });
+}
+
+function setFishStarInternalBalance(session, balance) {
+  const player = getFishStarInternalPlayer(session);
+  player.score = roundFishStarCoin(balance);
+  saveFishStarInternalPlayer(player);
+  return player;
+}
+
+function pushFishStarBalanceChange(userId, coin) {
+  for (const room of fishStarRooms.values()) {
+    const roomPlayer = room.players.get(userId);
+    if (roomPlayer) room.players.set(userId, { ...roomPlayer, coin });
+    for (const client of room.sockets) {
+      if (client.fishStarState && client.fishStarState.userId === userId && !client.destroyed) {
+        sendWsText(client, buildFishStarMessage(1019, { coin }));
+      }
+    }
+  }
+}
+
+async function refreshFishStarBalanceFromBaishun(session, options = {}) {
+  const userId = getFishStarSessionUserId(session);
+  const refresh = async () => {
+    if (!baishunService.isEnabled()) {
+      const player = getFishStarInternalPlayer(session);
+      return { skipped: true, balance: player.score, player };
+    }
+    const context = buildFishStarBaishunContext(session, options);
+    const result = await baishunService.getUserInfo(context);
+    const player = setFishStarInternalBalance(session, result.balance);
+    if (userId) pushFishStarBalanceChange(userId, player.score);
+    return { skipped: false, balance: player.score, player };
+  };
+  return userId ? withFishStarUserLock(userId, refresh) : refresh();
+}
+
+async function tryRefreshFishStarBalanceFromBaishun(session, options = {}) {
+  try {
+    return await refreshFishStarBalanceFromBaishun(session, options);
+  } catch (error) {
+    console.warn(`[fishstar] Baishun userinfo sync failed: ${error.message}`);
+    const player = getFishStarInternalPlayer(session);
+    return { skipped: false, failed: true, balance: player.score, player };
+  }
+}
+
+async function syncFishStarBaishunChange(session, options = {}) {
+  if (!baishunService.isEnabled() || !(Math.abs(Number(options.currencyDiff)) > 0)) return { skipped: true };
+  const context = buildFishStarBaishunContext(session, options);
+  return baishunService.changeBalance({
+    ...context,
+    currencyDiff: options.currencyDiff,
+    diffMsg: options.diffMsg,
+    gameRoundId: options.gameRoundId,
+    roomId: options.roomId,
+    orderId: options.orderId,
+    extend: options.extend
+  });
 }
 
 function roundFishStarCoin(value) {
@@ -980,7 +1156,7 @@ function decodeWsFrames(buffer) {
   return messages;
 }
 
-function handleFishStarWsMessage(socket, session, raw) {
+async function handleFishStarWsMessage(socket, session, raw) {
   let message;
   try {
     message = JSON.parse(raw);
@@ -993,6 +1169,7 @@ function handleFishStarWsMessage(socket, session, raw) {
     return;
   }
   if (msgId === 1001) {
+    await tryRefreshFishStarBalanceFromBaishun(session, { clientIp: socket.fishStarClientIp });
     const player = buildFishStarPlayer(session, socket.fishStarState ? socket.fishStarState.pos : 0);
     sendWsText(socket, buildFishStarMessage(1001, { coin: player.coin, currency_icon: "", country_code: "" }));
     return;
@@ -1008,6 +1185,7 @@ function handleFishStarWsMessage(socket, session, raw) {
       sendWsText(socket, buildFishStarMessage(1002, { error: "room full", roomId }));
       return;
     }
+    await tryRefreshFishStarBalanceFromBaishun(session, { clientIp: socket.fishStarClientIp, userId });
     const player = buildFishStarPlayer(session, pos);
     socket.fishStarState = { roomId, userId, pos };
     room.sockets.add(socket);
@@ -1024,12 +1202,31 @@ function handleFishStarWsMessage(socket, session, raw) {
       sendWsText(socket, buildFishStarMessage(1005, { ...requestData, newCoin: 0 }));
       return;
     }
+    await withFishStarUserLock(state.userId, async () => {
     const internalPlayer = getFishStarInternalPlayer(session);
     const player = buildFishStarPlayer(session, state.pos);
     const fireToken = requestData.fireToken || requestData.token || createFishStarFireToken(socket);
     const bet = normalizeFishStarBet(requestData.fire);
     const balanceBefore = Number(internalPlayer.score) || 0;
     const chargedBet = Math.min(bet, Math.max(0, balanceBefore));
+    if (chargedBet > 0) {
+      try {
+        await syncFishStarBaishunChange(session, {
+          userId: state.userId,
+          clientIp: socket.fishStarClientIp,
+          currencyDiff: -chargedBet,
+          diffMsg: "bet",
+          gameRoundId: fireToken,
+          roomId: state.roomId,
+          orderId: `${fireToken}-bet`,
+          extend: { change: "bet", change_type: "bet", fire_token: fireToken }
+        });
+      } catch (error) {
+        console.warn(`[fishstar] Baishun bet sync failed: ${error.message}`);
+        sendWsText(socket, buildFishStarMessage(1005, { ...requestData, userID: player.userId, userId: player.userId, fireToken, token: fireToken, newCoin: balanceBefore, error: "balance_sync_failed" }));
+        return;
+      }
+    }
     internalPlayer.score = roundFishStarCoin(balanceBefore - chargedBet);
     internalPlayer.totalBet = roundFishStarCoin((Number(internalPlayer.totalBet) || 0) + chargedBet);
     internalPlayer.spinCount = (Number(internalPlayer.spinCount) || 0) + 1;
@@ -1055,6 +1252,7 @@ function handleFishStarWsMessage(socket, session, raw) {
       fire: requestData.fire,
       angle: requestData.angle
     }, socket);
+    });
     return;
   }
   if (msgId === 1006 || msgId === 1016) {
@@ -1079,25 +1277,27 @@ function handleFishStarWsMessage(socket, session, raw) {
       sendWsText(socket, buildFishStarMessage(msgId, buildFishStarNoKillData(requestData, player, fireToken, fishId, internalPlayer.score)));
       return;
     }
+    await withFishStarUserLock(claimedUserId, async () => {
     const ownerSession = ownerSocket === socket ? session : ownerSocket && ownerSocket.fishStarSession;
     const ownerState = ownerSocket && ownerSocket.fishStarState;
     const internalPlayer = ownerSession ? getFishStarInternalPlayer(ownerSession) : getFishStarInternalPlayer(session);
     const player = buildFishStarPlayer(ownerSession || session, ownerState ? ownerState.pos : 0);
     const shotStore = ownerSocket ? getFishStarShotStore(ownerSocket) : new Map();
     const shot = fireToken ? shotStore.get(fireToken) : null;
-    if (fireToken && shot) shotStore.delete(fireToken);
     const balanceBefore = Number(internalPlayer.score) || 0;
     const fishId = requestData.fishId || requestData.id || 0;
     const fishKey = String(fishId);
     const fish = room && fishId ? room.fishs.get(fishKey) : null;
     const fishLive = Boolean(fish && !room.deadFishIds.has(fishKey));
     if (!shot || !(shot.bet > 0) || !fishLive) {
+      if (fireToken && shot) shotStore.delete(fireToken);
       sendWsText(socket, buildFishStarMessage(msgId, buildFishStarNoKillData(requestData, player, fireToken, fishId, internalPlayer.score)));
       return;
     }
     const strategy = getEffectiveStrategy(internalPlayer.merchantId, internalPlayer.gameId || "fishstar");
     const fishRule = getFishStarFishRule(fish);
     if (!fishRule || !shouldFishStarKill(internalPlayer, fish, strategy)) {
+      if (fireToken && shot) shotStore.delete(fireToken);
       sendWsText(socket, buildFishStarMessage(msgId, buildFishStarNoKillData(requestData, player, fireToken, fishId, internalPlayer.score)));
       return;
     }
@@ -1106,6 +1306,25 @@ function handleFishStarWsMessage(socket, session, raw) {
     const bonus = Math.max(1, roundFishStarCoin(shot.bet * fishRule.multiplier));
     const bigWinMultiplier = Number(strategy && strategy.bigWinMultiplier) || 20;
     const bigReward = bonus >= shot.bet * bigWinMultiplier;
+    try {
+      await syncFishStarBaishunChange(ownerSession || session, {
+        userId: player.userId,
+        clientIp: ownerSocket && ownerSocket.fishStarClientIp,
+        currencyDiff: bonus,
+        diffMsg: "win",
+        gameRoundId: fireToken,
+        roomId: ownerState && ownerState.roomId,
+        orderId: `${fireToken}-win-${fishId}`,
+        extend: { change: "win", change_type: "win", fire_token: fireToken, fish_id: fishId, multiplier: fishRule.multiplier }
+      });
+    } catch (error) {
+      console.warn(`[fishstar] Baishun win sync failed: ${error.message}`);
+      room.deadFishIds.delete(fishKey);
+      room.fishs.set(fishKey, fish);
+      sendWsText(socket, buildFishStarMessage(msgId, buildFishStarNoKillData(requestData, player, fireToken, fishId, internalPlayer.score)));
+      return;
+    }
+    if (fireToken && shot) shotStore.delete(fireToken);
     internalPlayer.score = roundFishStarCoin(balanceBefore + bonus);
     internalPlayer.totalWon = roundFishStarCoin((Number(internalPlayer.totalWon) || 0) + bonus);
     saveFishStarInternalPlayer(internalPlayer);
@@ -1136,6 +1355,7 @@ function handleFishStarWsMessage(socket, session, raw) {
     }
     sendFishStarRoomMessageExcept(room, 1016, hitData, directSockets);
     sendFishStarRoomMessage(room, 1003, { ids: [fishId], fishId, id: fishId }, null);
+    });
     return;
   }
   sendWsText(socket, buildFishStarMessage(msgId || 0, {}));
@@ -1386,6 +1606,38 @@ const server = http.createServer(async (request, response) => {
       const merchantId = embedSession ? embedSession.merchantId : null;
       const gameId = embedSession ? embedSession.gameId : null;
       sendJson(response, 200, getClientStrategyConfig(merchantId, gameId));
+      return;
+    }
+
+    if (request.method === "POST" && url.pathname === "/api/fishstar/wallet-update") {
+      const embedSession = readEmbedSession(request);
+      if (!embedSession || embedSession.gameId !== "fishstar") {
+        sendJson(response, 401, { ok: false, error: "missing_fishstar_session" });
+        return;
+      }
+      const body = await readBody(request);
+      const payload = body ? JSON.parse(body) : {};
+      const requestedUserId = String(payload.userId || payload.user_id || payload.userID || "").trim();
+      const sessionUserId = getFishStarSessionUserId(embedSession);
+      if (!requestedUserId || requestedUserId !== sessionUserId) {
+        sendJson(response, 403, { ok: false, error: "user_mismatch" });
+        return;
+      }
+      try {
+        const result = await refreshFishStarBalanceFromBaishun(embedSession, {
+          userId: requestedUserId,
+          clientIp: getClientIp(request)
+        });
+        sendJson(response, 200, {
+          ok: true,
+          skipped: Boolean(result.skipped),
+          userId: requestedUserId,
+          balance: result.balance
+        });
+      } catch (error) {
+        console.warn(`[fishstar] wallet-update Baishun sync failed: ${error.message}`);
+        sendJson(response, 502, { ok: false, error: "baishun_userinfo_failed" });
+      }
       return;
     }
 
@@ -1902,6 +2154,56 @@ const server = http.createServer(async (request, response) => {
       return;
     }
 
+    {
+      const appsMatch = url.pathname.match(/^\/api\/admin\/merchants\/([a-z0-9_-]+)\/apps$/);
+      if (appsMatch && request.method === "GET") {
+        const mId = appsMatch[1];
+        if (!merchantService.getMerchant(mId)) {
+          sendJson(response, 404, { ok: false, error: "merchant_not_found" });
+          return;
+        }
+        sendJson(response, 200, { ok: true, items: merchantService.listMerchantApps(mId) });
+        return;
+      }
+      if (appsMatch && request.method === "POST") {
+        const mId = appsMatch[1];
+        const body = await readBody(request);
+        const payload = body ? JSON.parse(body) : {};
+        try {
+          const app = merchantService.createMerchantApp({
+            merchantId: mId,
+            appId: payload.appId,
+            appChannel: payload.appChannel || payload.channel,
+            appKey: payload.appKey,
+            name: payload.name
+          });
+          sendJson(response, 200, { ok: true, app });
+        } catch (error) {
+          sendJson(response, 400, { ok: false, error: error.message });
+        }
+        return;
+      }
+
+      const appActionMatch = url.pathname.match(/^\/api\/admin\/merchants\/([a-z0-9_-]+)\/apps\/(update|rotate)$/);
+      if (appActionMatch && request.method === "POST") {
+        const mId = appActionMatch[1];
+        const action = appActionMatch[2];
+        const body = await readBody(request);
+        const payload = body ? JSON.parse(body) : {};
+        try {
+          const appId = payload.appId;
+          const appChannel = payload.appChannel || payload.channel;
+          const app = action === "rotate"
+            ? merchantService.rotateMerchantAppKey(mId, appId, appChannel)
+            : merchantService.updateMerchantApp(mId, appId, appChannel, payload);
+          sendJson(response, 200, { ok: true, app });
+        } catch (error) {
+          sendJson(response, 400, { ok: false, error: error.message });
+        }
+        return;
+      }
+    }
+
     if (request.method === "POST" && url.pathname.startsWith("/api/admin/merchants/")) {
       const segs = url.pathname.split("/").filter(Boolean);
       // /api/admin/merchants/:merchantId/(rotate|update)
@@ -1945,30 +2247,13 @@ const server = http.createServer(async (request, response) => {
 
     // ========= 商户接入(server-to-server,HMAC 签名) =========
     if (url.pathname.startsWith("/api/merchant/")) {
-      const merchantId = request.headers["x-merchant-id"] || "";
-      const timestamp = request.headers["x-timestamp"] || "";
-      const signature = request.headers["x-signature"] || "";
-      const merchant = merchantId ? merchantService.getMerchant(merchantId) : null;
-
-      // 鉴权 check(对所有 /api/merchant/* 强制)
-      const ip = getClientIp(request);
-      if (!merchant) {
-        sendJson(response, 401, { ok: false, error: "merchant_not_found" });
-        return;
-      }
-      if (merchant.status !== "active") {
-        sendJson(response, 403, { ok: false, error: "merchant_disabled" });
-        return;
-      }
-      if (!merchantService.isIpAllowed(merchant, ip)) {
-        sendJson(response, 403, { ok: false, error: "ip_not_allowed", ip });
-        return;
-      }
       const body = await readBody(request);
-      if (!merchantService.verifyServerSignature(merchant.secret, body || "", timestamp, signature)) {
-        sendJson(response, 401, { ok: false, error: "invalid_signature" });
+      const auth = authenticateMerchantApiRequest(request, body, url);
+      if (!auth.merchant) {
+        sendJson(response, auth.status || 401, { ok: false, error: auth.error, ...(auth.ip ? { ip: auth.ip } : {}) });
         return;
       }
+      const merchant = auth.merchant;
       const payload = body ? JSON.parse(body) : {};
 
       // POST /api/merchant/launch
@@ -1997,6 +2282,7 @@ const server = http.createServer(async (request, response) => {
             avatar: payload.avatar || null,
             lang: payload.lang || "en",
             fishstarUserId: payload.fishstarUserId ?? payload.userId ?? null,
+            baishun: buildBaishunLaunchPayload(payload, externalUserId),
             initialBalance: Number(payload.initialBalance) || null
           }
         });
@@ -2007,6 +2293,47 @@ const server = http.createServer(async (request, response) => {
           expiresAt: launch.expiresAt,
           gameUrl: `${origin}/embed?token=${launch.token}`
         });
+        return;
+      }
+
+      // POST /api/merchant/play-code — App 服务端生成一次性 code 游戏地址
+      if (request.method === "POST" && url.pathname === "/api/merchant/play-code") {
+        const externalUserId = String(payload.externalUserId || payload.userId || "").trim();
+        const gameId = String(payload.gameId || "").trim();
+        if (!externalUserId) {
+          sendJson(response, 400, { ok: false, error: "externalUserId required" });
+          return;
+        }
+        if (!gameId) {
+          sendJson(response, 400, { ok: false, error: "gameId required" });
+          return;
+        }
+        if (!gameService.isMerchantGameAllowed(merchant.merchant_id, gameId)) {
+          sendJson(response, 403, { ok: false, error: "game_not_allowed_for_merchant" });
+          return;
+        }
+        const origin = `${isHttps(request) ? "https" : "http"}://${request.headers.host}`;
+        try {
+          const created = generateMerchantPlayCode({
+            ...payload,
+            merchantId: merchant.merchant_id,
+            externalUserId,
+            gameId
+          }, origin);
+          sendJson(response, 200, {
+            ok: true,
+            code: created.code,
+            gameUrl: created.gameUrl,
+            playUrl: created.playUrl,
+            gameId: created.gameId,
+            externalUserId: created.externalUserId,
+            appId: auth.app ? auth.app.app_id : null,
+            appChannel: auth.app ? auth.app.app_channel : null,
+            expiresOnFirstUse: true
+          });
+        } catch (error) {
+          sendJson(response, 400, { ok: false, error: error.message });
+        }
         return;
       }
 
@@ -2136,21 +2463,25 @@ const server = http.createServer(async (request, response) => {
       // raw 模式:消费 token,302 到 /embed(原行为)
       // FishStar 原包在 iframe 预览壳里会进入 pc iframe 分支,因此测试 Code 默认也直接打开原包。
       if (url.searchParams.get("raw") === "1" || tc.gameId === "fishstar") {
+        const consumedCode = consumeTestCode(code);
+        if (!consumedCode || !consumedCode.merchantId || !consumedCode.externalUserId || !consumedCode.gameId) {
+          sendText(response, 410, "code already used or expired");
+          return;
+        }
         const launch = merchantService.createLaunchToken({
-          merchantId: tc.merchantId,
-          externalUserId: tc.externalUserId,
-          gameId: tc.gameId,
+          merchantId: consumedCode.merchantId,
+          externalUserId: consumedCode.externalUserId,
+          gameId: consumedCode.gameId,
           payload: {
-            nickname: `QA ${tc.code.slice(-6)}`,
+            nickname: `QA ${consumedCode.code.slice(-6)}`,
             lang: "en",
             fromTestCode: true,
-            initialBalance: tc.initialBalance,
-            displayMode: tc.displayMode || url.searchParams.get("displayMode") || "half",
-            fishstarUserId: tc.gameId === "fishstar" ? tc.externalUserId : null,
-            userId: tc.gameId === "fishstar" ? tc.externalUserId : null
+            initialBalance: consumedCode.initialBalance,
+            displayMode: consumedCode.displayMode || url.searchParams.get("displayMode") || "half",
+            fishstarUserId: consumedCode.gameId === "fishstar" ? consumedCode.externalUserId : null,
+            userId: consumedCode.gameId === "fishstar" ? consumedCode.externalUserId : null
           }
         });
-        markTestCodeConsumed(code);
         response.writeHead(302, { "Location": `/embed?token=${launch.token}` });
         response.end();
         return;
@@ -2182,10 +2513,11 @@ const server = http.createServer(async (request, response) => {
       const assetUrl = (game && game.assetUrl) || "/pinatawins/index.html";
       // 把 token 解析的玩家身份写入一个短期 cookie
       const sessionCookie = buildEmbedSessionCookie({
+        launchToken: consumed.token,
         merchantId: consumed.merchantId,
         externalUserId: consumed.externalUserId,
         gameId: consumed.gameId,
-        payload: consumed.payload
+        payload: sanitizeEmbedSessionPayload(consumed.payload)
       }, request);
       response.writeHead(302, {
         "Set-Cookie": sessionCookie,
@@ -2269,8 +2601,16 @@ server.on("upgrade", (request, socket, head) => {
     ""
   ].join("\r\n"));
   socket.fishStarSession = session;
+  socket.fishStarClientIp = getClientIp(request);
   socket.on("data", (chunk) => {
-    for (const raw of decodeWsFrames(chunk)) handleFishStarWsMessage(socket, session, raw);
+    const frames = decodeWsFrames(chunk);
+    socket.fishStarQueue = (socket.fishStarQueue || Promise.resolve())
+      .then(async () => {
+        for (const raw of frames) await handleFishStarWsMessage(socket, session, raw);
+      })
+      .catch((error) => {
+        console.warn(`[fishstar] ws message failed: ${error.message}`);
+      });
   });
   socket.on("close", () => leaveFishStarRoom(socket));
   socket.on("error", () => { leaveFishStarRoom(socket); socket.destroy(); });

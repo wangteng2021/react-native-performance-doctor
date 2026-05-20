@@ -163,6 +163,22 @@ function initSchema(database) {
       updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    -- 商户下的 App 凭据。App 服务端用 app_id/app_channel 定位,app_key 做 HMAC 密钥。
+    CREATE TABLE IF NOT EXISTS merchant_apps (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      merchant_id   TEXT NOT NULL,
+      app_id        TEXT NOT NULL,
+      app_channel   TEXT NOT NULL,
+      app_key       TEXT NOT NULL,
+      name          TEXT,
+      status        TEXT NOT NULL DEFAULT 'active',
+      created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at    TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(app_id, app_channel)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_merchant_apps_merchant ON merchant_apps(merchant_id, created_at DESC);
+
     -- 一次性启动 token(5 分钟过期,用一次就失效)
     CREATE TABLE IF NOT EXISTS launch_tokens (
       token            TEXT PRIMARY KEY,
@@ -231,6 +247,7 @@ function initSchema(database) {
        WHERE merchant_id IS NOT NULL AND external_user_id IS NOT NULL`
   );
   database.exec(`CREATE INDEX IF NOT EXISTS idx_test_codes_merchant ON test_codes(merchant_id, created_at DESC)`);
+  database.exec(`CREATE INDEX IF NOT EXISTS idx_merchant_apps_merchant ON merchant_apps(merchant_id, created_at DESC)`);
   database.exec(`CREATE INDEX IF NOT EXISTS idx_audit_merchant ON admin_audit(merchant_id, created_at DESC)`);
   database.exec(`CREATE INDEX IF NOT EXISTS idx_txn_game ON transactions(game_id, created_at DESC)`);
 
