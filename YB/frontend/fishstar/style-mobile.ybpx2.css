@@ -63,9 +63,8 @@ body {
   top: 0;
   right: 0;
   bottom: 0;
-  width: 100vw !important;
-  height: 100vh !important;
-  height: 100dvh !important;
+  width: 100%;
+  height: 100%;
 
   display: -webkit-box;
   -webkit-box-orient: horizontal;
@@ -98,11 +97,15 @@ p.footer {
 }
 
 #splash {
-  position: absolute;
+  position: fixed;
   left: 0;
+  top: 0;
+  right: 0;
   bottom: 0;
-  width: 100%;
-  height: 100%;
+  z-index: 10;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
   background: #423b7f url(./bigbg.1d9fd.jpg) no-repeat center;
   background-size: 100%;
 }

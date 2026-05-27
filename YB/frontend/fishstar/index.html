@@ -4,6 +4,8 @@
 <head>
     <script>
       (function () {
+        var originalSearch = window.location.search;
+        window.__FishStarOriginalSearch = originalSearch;
         var incoming = new URLSearchParams(window.location.search);
         var queryParams = new URLSearchParams();
         queryParams.set("gsp", "101");
@@ -12,7 +14,7 @@
         queryParams.set("currencyIcon", "diamondIcon.png");
         queryParams.set("aspectRatio", "1");
         queryParams.set("gameMode", incoming.get("gameMode") || "2");
-        queryParams.append("gameId", "FishStar");
+        queryParams.append("gameId", "FishStarAI");
         queryParams.set("appId", "7990057035");
         queryParams.set("appChannel", "chatna");
         queryParams.set("roomId", incoming.get("roomId") || "85422171");
@@ -23,7 +25,9 @@
         queryParams.set("isDataByUrl", "1");
         if (incoming.get("embed")) queryParams.set("embed", incoming.get("embed"));
         if (incoming.get("backurl")) queryParams.set("backurl", incoming.get("backurl"));
-        queryParams.append("gameId", "FishStar");
+        if (incoming.get("code")) queryParams.set("code", incoming.get("code"));
+        if (incoming.get("fishstarCode")) queryParams.set("fishstarCode", incoming.get("fishstarCode"));
+        queryParams.append("gameId", "FishStarAI");
         var query = queryParams.toString();
         if (window.location.search.slice(1) !== query) {
           window.history.replaceState(null, '', window.location.pathname + '?' + query + window.location.hash);
@@ -117,7 +121,7 @@
             ? String(payload)
             : String((payload && (payload.userId || payload.user_id || payload.userID)) || "");
           if (!userId) return Promise.reject(new Error("walletUpdate requires userId"));
-          return fetch("/api/fishstar/wallet-update", {
+          return fetch("/fishstar-backend/api/fishstar/wallet-update", {
             method: "POST",
             credentials: "same-origin",
             headers: { "Content-Type": "application/json" },
@@ -278,7 +282,7 @@
                 //加载report
                 BSUtils.loadReport(() => {
                     //初始化report
-                    var gameId = 1022;
+                    var gameId = 11022;
                     var env = 1;
                     var appChannel = '';
                     if(params.appChannel){

@@ -106,6 +106,10 @@
             <label>返奖率 RTP(0-1)<input name="rtpTarget" type="number" min="0.5" max="1.5" step="0.01" /></label>
             <label>RTP 容差<input name="rtpTolerance" type="number" min="0" max="0.3" step="0.01" /></label>
             <label>单局封顶倍数<input name="maxWinMultiplier" type="number" min="10" max="100000" step="10" /></label>
+            <label>FishStar provider game_id<input name="fishstarProviderGameId" /></label>
+            <label>FishStar 大炮档位(逗号分隔)<input name="fishstarCannonLevels" placeholder="1,10,100,1000" /></label>
+            <label>FishStar 击杀率倍率<input name="fishstarKillChanceMultiplier" type="number" min="0.01" max="100" step="0.01" /></label>
+            <label>FishStar 最低击杀率<input name="fishstarMinKillChance" type="number" min="0" max="1" step="0.001" /></label>
           </form>
 
           <h3 style="margin-top:24px;">新手保护期(前 N 局给玩家更高中奖率)</h3>
@@ -613,15 +617,36 @@
         const tierForm = document.getElementById("tierForm");
         const tierStatus = document.getElementById("tierStatus");
 
+        function fillFishStarStrategy(form, strategy) {
+          const fs = (strategy && strategy.fishstar) || {};
+          form.querySelector('[name="fishstarProviderGameId"]').value = fs.providerGameId || "11022";
+          form.querySelector('[name="fishstarCannonLevels"]').value = (fs.cannonLevels || [1, 10, 100, 1000]).join(",");
+          form.querySelector('[name="fishstarKillChanceMultiplier"]').value = fs.killChanceMultiplier ?? 1;
+          form.querySelector('[name="fishstarMinKillChance"]').value = fs.minKillChance ?? 0;
+        }
+
+        function readFishStarStrategy(form) {
+          return {
+            providerGameId: form.querySelector('[name="fishstarProviderGameId"]').value.trim(),
+            cannonLevels: form.querySelector('[name="fishstarCannonLevels"]').value
+              .split(",")
+              .map((x) => Number(x.trim()))
+              .filter((x) => Number.isFinite(x) && x > 0),
+            killChanceMultiplier: Number(form.querySelector('[name="fishstarKillChanceMultiplier"]').value),
+            minKillChance: Number(form.querySelector('[name="fishstarMinKillChance"]').value)
+          };
+        }
+
         async function loadStrategy() {
           if (!currentGameId) return;
           try {
             const data = await YBAdmin.fetchJson(`/api/admin/merchants/${encodeURIComponent(merchantId)}/games/${encodeURIComponent(currentGameId)}/strategy`);
-            const s = data.strategy;
+            const s = data.strategy || {};
             STRATEGY_FIELDS.forEach((f) => {
               const inp = strategyForm.querySelector(`[name="${f}"]`);
               if (inp && s[f] !== undefined) inp.value = s[f];
             });
+            fillFishStarStrategy(strategyForm, s);
             // 新手保护
             const nu = s.newUserProtection || {};
             NEW_USER_FIELDS.forEach((f) => {
@@ -665,6 +690,7 @@
             const v = Number(strategyForm.querySelector(`[name="${f}"]`).value);
             if (Number.isFinite(v)) payload[f] = v;
           });
+          payload.fishstar = readFishStarStrategy(strategyForm);
           // 新手保护期子对象
           const newUserPatch = {};
           NEW_USER_FIELDS.forEach((f) => {
